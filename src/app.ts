@@ -8,6 +8,9 @@ import dbPlugin from './plugins/db';
 
 // Import modules (to be created)
 import authRoutes from './modules/auth/auth.routes';
+import departmentsRoutes from './modules/departments/departments.routes';
+import { locationsRoutes } from './modules/locations/locations.routes';
+import employeesRoutes from './modules/employees/employees.routes';
 
 const buildApp = async (): Promise<FastifyInstance> => {
     const app = Fastify({
@@ -35,6 +38,9 @@ const buildApp = async (): Promise<FastifyInstance> => {
 
     // Register modules
     await app.register(authRoutes, { prefix: '/auth' });
+    await app.register(departmentsRoutes, { prefix: '/departments' });
+    await app.register(locationsRoutes, { prefix: '/locations' });
+    await app.register(employeesRoutes, { prefix: '/employees' });
 
     return app;
 };

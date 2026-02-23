@@ -5,12 +5,13 @@ import { relations } from "drizzle-orm";
 export const appTypeEnum = pgEnum("app_type", ["HRIS", "ASSET_TRACKER"]);
 export const employeeStatusEnum = pgEnum("employee_status", ["ACTIVE", "REMOTE", "ON_LEAVE", "TERMINATED"]);
 export const departmentStatusEnum = pgEnum("department_status", ["ACTIVE", "INACTIVE"]);
+export const locationStatusEnum = pgEnum("location_status", ["ACTIVE", "INACTIVE"]);
 
 // -----------------------------------------------------------------------------
 // Auth & User Management
 // -----------------------------------------------------------------------------
 
-export const users = pgTable("User", {
+export const users = pgTable("HRIS_USER", {
     id: uuid("id").primaryKey().defaultRandom(),
     email: text("email").unique().notNull(),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
@@ -20,7 +21,7 @@ export const users = pgTable("User", {
     passwordHash: text("passwordHash"),
 });
 
-export const userRoles = pgTable("UserRole", {
+export const userRoles = pgTable("HRIS_USER_ROLE", {
     id: uuid("id").primaryKey().defaultRandom(),
     userId: uuid("userId").notNull().references(() => users.id),
     app: appTypeEnum("app").notNull(),
@@ -43,7 +44,7 @@ export const userRolesRelations = relations(userRoles, ({ one }) => ({
 // HRIS Core Domain
 // -----------------------------------------------------------------------------
 
-export const departments = pgTable("Department", {
+export const departments = pgTable("HRIS_DEPARTMENT", {
     id: uuid("id").primaryKey().defaultRandom(),
     name: text("name").notNull(),
     description: text("description"),
@@ -70,7 +71,20 @@ export const departmentsRelations = relations(departments, ({ one, many }) => ({
     employees: many(employees),
 }));
 
-export const employees = pgTable("Employee", {
+// -----------------------------------------------------------------------------
+// Location Management
+// -----------------------------------------------------------------------------
+
+export const locations = pgTable("HRIS_LOCATION", {
+    id: uuid("id").primaryKey().defaultRandom(),
+    name: text("name").notNull(),
+    address: text("address"),
+    status: locationStatusEnum("status").default("ACTIVE").notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
+});
+
+export const employees = pgTable("HRIS_EMPLOYEE", {
     id: uuid("id").primaryKey().defaultRandom(),
     userId: uuid("userId").unique().notNull().references(() => users.id),
     firstName: text("firstName").notNull(),

@@ -38,9 +38,9 @@ async function main() {
         await db.insert(userRoles).values({
             userId: user.id,
             app: 'HRIS',
-            role: 'SUPER_ADMIN',
+            role: 'OWNER',
         });
-        console.log(`✅ Assigned SUPER_ADMIN role for HRIS`);
+        console.log(`✅ Assigned OWNER role for HRIS`);
     } else {
         console.log(`ℹ️ User already has HRIS role`);
     }
