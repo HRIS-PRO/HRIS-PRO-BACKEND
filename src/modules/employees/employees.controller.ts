@@ -31,4 +31,35 @@ export class EmployeesController {
             return reply.code(500).send({ message: 'Error creating employee' });
         }
     }
+
+    async getEmployeeRoles(
+        request: FastifyRequest<{ Params: { id: string } }>,
+        reply: FastifyReply
+    ) {
+        try {
+            const roles = await this.employeesService.getEmployeeRoles(request.params.id);
+            return reply.send(roles);
+        } catch (error) {
+            request.log.error(error);
+            return reply.code(500).send({ message: 'Error fetching employee roles' });
+        }
+    }
+
+    async assignEmployeeRole(
+        request: FastifyRequest<{ Params: { id: string, app: string }, Body: { role: string } }>,
+        reply: FastifyReply
+    ) {
+        try {
+            const { id, app } = request.params;
+            const { role } = request.body;
+            const updatedRole = await this.employeesService.assignEmployeeRole(id, app, role);
+            return reply.send(updatedRole);
+        } catch (error: any) {
+            request.log.error(error);
+            if (error.message === 'User not found for this employee') {
+                return reply.code(404).send({ message: error.message });
+            }
+            return reply.code(500).send({ message: 'Error assigning role' });
+        }
+    }
 }

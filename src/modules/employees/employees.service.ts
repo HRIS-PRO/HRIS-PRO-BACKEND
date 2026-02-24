@@ -1,7 +1,7 @@
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { db } from '../../db';
-import { users, employees, userRoles } from '../../db/schema';
-import { CreateEmployeeInput } from './employees.schema';
+import { users, employees, userRoles, departments } from '../../db/schema';
+import { CreateEmployeeInput, AssignRoleInput } from './employees.schema';
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import { sendEmail } from '../shared/zepto';
@@ -23,13 +23,25 @@ export class EmployeesService {
     async getAllEmployees() {
         const allEmployees = await this.db.query.employees.findMany();
 
-        const formatted = allEmployees.map(emp => ({
-            id: emp.id,
-            name: `${emp.firstName} ${emp.surname}`,
-            role: emp.roleId,
-            department: emp.departmentId,
-            avatar: `https://ui-avatars.com/api/?name=${emp.firstName}+${emp.surname}&background=random`
-        }));
+        const formatted = allEmployees.map(emp => {
+            // Map DB enum status to Frontend status
+            let mappedStatus = 'Active';
+            if (emp.status === 'ACTIVE') mappedStatus = 'Active';
+            else if (emp.status === 'REMOTE') mappedStatus = 'Remote';
+            else if (emp.status === 'ON_LEAVE') mappedStatus = 'On Leave';
+            else if (emp.status === 'TERMINATED') mappedStatus = 'Terminated';
+
+            return {
+                id: emp.id,
+                userId: emp.userId,
+                name: `${emp.firstName} ${emp.surname}`,
+                role: emp.roleId,
+                department: emp.departmentId,
+                location: emp.location,
+                status: mappedStatus,
+                avatar: `https://ui-avatars.com/api/?name=${emp.firstName}+${emp.surname}&background=random`
+            };
+        });
 
         const owners = await this.db.query.userRoles.findMany({
             where: eq(userRoles.role, 'OWNER'),
@@ -38,9 +50,12 @@ export class EmployeesService {
 
         const ownerFormatted = owners.map(owner => ({
             id: owner.userId,
+            userId: owner.userId,
             name: owner.user?.email || 'System Owner',
             role: 'OWNER',
             department: 'Administration',
+            location: 'System',
+            status: 'Active',
             avatar: `https://ui-avatars.com/api/?name=${owner.user?.email || 'Owner'}&background=random`
         }));
 
@@ -95,9 +110,16 @@ export class EmployeesService {
                 departmentId: data.departmentId,
                 roleId: data.roleId,
                 location: data.location,
-                hiringManagerId: data.hiringManagerId,
+                hiringManagerId: data.hiringManagerId ? data.hiringManagerId : 'UNASSIGNED',
                 status: data.status,
             }).returning();
+
+            // Increment department staffCount
+            if (data.departmentId) {
+                await tx.update(departments)
+                    .set({ staffCount: sql`${departments.staffCount} + 1` })
+                    .where(eq(departments.id, data.departmentId));
+            }
 
             return createdEmployee;
         });
@@ -126,5 +148,57 @@ export class EmployeesService {
         }
 
         return newEmployee;
+    }
+
+    async getEmployeeRoles(employeeId: string) {
+        const employee = await this.db.query.employees.findFirst({
+            where: eq(employees.id, employeeId),
+            columns: { userId: true }
+        });
+
+        if (!employee || !employee.userId) {
+            throw new Error('User not found for this employee');
+        }
+
+        const roles = await this.db.query.userRoles.findMany({
+            where: eq(userRoles.userId, employee.userId)
+        });
+
+        return roles;
+    }
+
+    async assignEmployeeRole(employeeId: string, appName: string, roleName: string) {
+        const employee = await this.db.query.employees.findFirst({
+            where: eq(employees.id, employeeId),
+            columns: { userId: true }
+        });
+
+        if (!employee || !employee.userId) {
+            throw new Error('User not found for this employee');
+        }
+
+        // Check if role for this app already exists for user
+        const existingRoles = await this.db.query.userRoles.findMany({
+            where: eq(userRoles.userId, employee.userId)
+        });
+
+        const existingRole = existingRoles.find(r => r.app === appName);
+
+        if (existingRole) {
+            // Update existing
+            const [updated] = await this.db.update(userRoles)
+                .set({ role: roleName })
+                .where(eq(userRoles.id, existingRole.id))
+                .returning();
+            return updated;
+        } else {
+            // Insert new
+            const [inserted] = await this.db.insert(userRoles).values({
+                userId: employee.userId,
+                app: appName as any, // Type cast or ensure schema enum matches
+                role: roleName
+            }).returning();
+            return inserted;
+        }
     }
 }

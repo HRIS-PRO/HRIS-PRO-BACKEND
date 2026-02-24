@@ -15,7 +15,11 @@ const schema = z.object({
 
     // ZeptoMail
     ZEPTO_FROM_EMAIL: z.string().email(),
-    ZEPTO_TOKEN: z.string().min(1)
+    ZEPTO_TOKEN: z.string().min(1),
+
+    // Supabase
+    SUPABASE_URL: z.string().url(),
+    SUPABASE_KEY: z.string().min(1),
 });
 
 const _env = schema.safeParse(process.env);

@@ -8,8 +8,16 @@ export default async function departmentsRoutes(app: FastifyInstance) {
     const departmentsService = new DepartmentsService(app.db);
     const departmentsController = new DepartmentsController(departmentsService);
 
-    // Note: For production, we would add the `onRequest: [app.authenticate]` hook 
-    // here to protect these routes. Assuming it matches auth logic.
+    app.addHook('onRequest', async (request, reply) => {
+        try {
+            if (request.headers.authorization) {
+                await request.jwtVerify();
+            }
+        } catch (err) {
+            // Log or ignore if some routes don't strictly need it, but we want request.user
+            request.log.error(err);
+        }
+    });
 
     app.get(
         '/',

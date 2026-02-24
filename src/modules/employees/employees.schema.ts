@@ -10,8 +10,13 @@ export const createEmployeeSchema = z.object({
     departmentId: z.string().uuid(),
     roleId: z.string().min(1),
     location: z.string().min(1),
-    hiringManagerId: z.string().min(1),
+    hiringManagerId: z.string().optional().nullable().or(z.literal('')),
     status: z.enum(['ACTIVE', 'REMOTE', 'ON_LEAVE', 'TERMINATED']).default('ACTIVE')
 });
 
+export const assignRoleSchema = z.object({
+    role: z.string().min(1)
+});
+
 export type CreateEmployeeInput = z.infer<typeof createEmployeeSchema>;
+export type AssignRoleInput = z.infer<typeof assignRoleSchema>;

@@ -6,6 +6,7 @@ export const appTypeEnum = pgEnum("app_type", ["HRIS", "ASSET_TRACKER"]);
 export const employeeStatusEnum = pgEnum("employee_status", ["ACTIVE", "REMOTE", "ON_LEAVE", "TERMINATED"]);
 export const departmentStatusEnum = pgEnum("department_status", ["ACTIVE", "INACTIVE"]);
 export const locationStatusEnum = pgEnum("location_status", ["ACTIVE", "INACTIVE"]);
+export const assetStatusEnum = pgEnum("asset_status", ["ACTIVE", "MAINTENANCE", "PENDING", "LOST", "DECOMMISSIONED", "IDLE"]);
 
 // -----------------------------------------------------------------------------
 // Auth & User Management
@@ -110,5 +111,35 @@ export const employeesRelations = relations(employees, ({ one }) => ({
     department: one(departments, {
         fields: [employees.departmentId],
         references: [departments.id],
+    }),
+}));
+
+// -----------------------------------------------------------------------------
+// Asset Management
+// -----------------------------------------------------------------------------
+
+export const assets = pgTable("ASSET", {
+    id: text("id").primaryKey(), // Using custom ID logic (e.g. AST-XXXX)
+    name: text("name").notNull(),
+    category: text("category").notNull(),
+    assignedTo: uuid("assignedTo").references(() => users.id), // Nullable for unassigned
+    department: text("department"),
+    manager: text("manager"),
+    status: assetStatusEnum("status").default("IDLE").notNull(),
+    purchaseDate: text("purchaseDate").notNull(), // Storing as ISO string to match frontend
+    purchasePrice: integer("purchasePrice").notNull(),
+    condition: text("condition").notNull(),
+    location: text("location").notNull(),
+    serialNumber: text("serialNumber"),
+    description: text("description"),
+    fileUrl: text("fileUrl"), // Supabase storage URL
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
+});
+
+export const assetsRelations = relations(assets, ({ one }) => ({
+    assignee: one(users, {
+        fields: [assets.assignedTo],
+        references: [users.id],
     }),
 }));
