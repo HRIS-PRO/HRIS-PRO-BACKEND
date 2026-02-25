@@ -40,6 +40,16 @@ export class AssetsController {
         }
     }
 
+    async getAllAssets(request: FastifyRequest, reply: FastifyReply) {
+        try {
+            const assets = await this.assetsService.getAllAssets();
+            return reply.send(assets);
+        } catch (error: any) {
+            request.log.error(error);
+            return reply.status(500).send({ message: error.message || 'Failed to fetch assets' });
+        }
+    }
+
     async acceptAsset(request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) {
         try {
             const { id } = request.params;
@@ -48,6 +58,57 @@ export class AssetsController {
         } catch (error: any) {
             request.log.error(error);
             return reply.status(500).send({ message: error.message || 'Failed to accept asset' });
+        }
+    }
+
+    async bulkAcceptAssets(request: FastifyRequest<{ Body: { assetIds: string[] } }>, reply: FastifyReply) {
+        try {
+            const { assetIds } = request.body;
+            if (!assetIds || !Array.isArray(assetIds)) {
+                return reply.status(400).send({ message: 'assetIds must be an array of strings' });
+            }
+            const updatedAssets = await this.assetsService.bulkAcceptAssets(assetIds);
+            return reply.send(updatedAssets);
+        } catch (error: any) {
+            request.log.error(error);
+            return reply.status(500).send({ message: error.message || 'Failed to bulk accept assets' });
+        }
+    }
+
+    async assignAsset(request: FastifyRequest<{ Params: { id: string }, Body: { assignedTo: string; manager: string; department: string } }>, reply: FastifyReply) {
+        try {
+            const { id } = request.params;
+            const data = request.body;
+
+            if (!data.assignedTo || !data.manager || !data.department) {
+                return reply.status(400).send({ message: 'assignedTo, manager, and department are tightly required for assignment' });
+            }
+
+            const updatedAsset = await this.assetsService.assignAsset(id, data);
+            return reply.send(updatedAsset);
+        } catch (error: any) {
+            request.log.error(error);
+            return reply.status(500).send({ message: error.message || 'Failed to assign asset' });
+        }
+    }
+
+    async bulkAssignAssets(request: FastifyRequest<{ Body: { assetIds: string[], data: { assignedTo: string; manager: string; department: string } } }>, reply: FastifyReply) {
+        try {
+            const { assetIds, data } = request.body;
+
+            if (!assetIds || !Array.isArray(assetIds) || assetIds.length === 0) {
+                return reply.status(400).send({ message: 'assetIds must be a non-empty array of strings' });
+            }
+
+            if (!data || !data.assignedTo || !data.manager || !data.department) {
+                return reply.status(400).send({ message: 'Assignment data (assignedTo, manager, department) is required' });
+            }
+
+            const updatedAssets = await this.assetsService.bulkAssignAssets(assetIds, data);
+            return reply.send(updatedAssets);
+        } catch (error: any) {
+            request.log.error(error);
+            return reply.status(500).send({ message: error.message || 'Failed to bulk assign assets' });
         }
     }
 }

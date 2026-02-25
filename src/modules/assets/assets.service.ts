@@ -100,4 +100,63 @@ export class AssetsService {
 
         return updatedAsset;
     }
+
+    async bulkAcceptAssets(assetIds: string[]) {
+        // Use inArray from drizzle-orm if possible, or execute individually.
+        // Assuming we can map over them and accept individually for simplicity if inArray is not imported or complex,
+        // but it's better to import `inArray` if we can.
+        // Let's implement it the simple way first to avoid missing imports.
+        const updatedAssets = await Promise.all(
+            assetIds.map(async (id) => {
+                const [updated] = await this.db.update(assets)
+                    .set({ status: 'ACTIVE' })
+                    .where(eq(assets.id, id))
+                    .returning();
+                return updated;
+            })
+        );
+        return updatedAssets.filter(Boolean);
+    }
+
+    async assignAsset(id: string, data: { assignedTo: string; manager: string; department: string }) {
+        const [updatedAsset] = await this.db.update(assets)
+            .set({
+                assignedTo: data.assignedTo,
+                manager: data.manager,
+                department: data.department,
+                status: 'PENDING'
+            })
+            .where(eq(assets.id, id))
+            .returning();
+
+        if (!updatedAsset) {
+            throw new Error(`Asset with id ${id} not found`);
+        }
+
+        // Logic to dispatch consent email can go here in the future
+
+        return updatedAsset;
+    }
+
+    async bulkAssignAssets(assetIds: string[], data: { assignedTo: string; manager: string; department: string }) {
+        const updatedAssets = await Promise.all(
+            assetIds.map(async (id) => {
+                const [updated] = await this.db.update(assets)
+                    .set({
+                        assignedTo: data.assignedTo,
+                        manager: data.manager,
+                        department: data.department,
+                        status: 'PENDING'
+                    })
+                    .where(eq(assets.id, id))
+                    .returning();
+                return updated;
+            })
+        );
+        return updatedAssets.filter(Boolean);
+    }
+
+    async getAllAssets() {
+        return this.db.query.assets.findMany();
+    }
 }
