@@ -7,6 +7,7 @@ export const employeeStatusEnum = pgEnum("employee_status", ["ACTIVE", "REMOTE",
 export const departmentStatusEnum = pgEnum("department_status", ["ACTIVE", "INACTIVE"]);
 export const locationStatusEnum = pgEnum("location_status", ["ACTIVE", "INACTIVE"]);
 export const assetStatusEnum = pgEnum("asset_status", ["ACTIVE", "MAINTENANCE", "PENDING", "LOST", "DECOMMISSIONED", "IDLE"]);
+export const reportStatusEnum = pgEnum("report_status", ["PENDING", "IN_REVIEW", "RESOLVED"]);
 
 // -----------------------------------------------------------------------------
 // Auth & User Management
@@ -140,6 +141,46 @@ export const assets = pgTable("ASSET", {
 export const assetsRelations = relations(assets, ({ one }) => ({
     assignee: one(users, {
         fields: [assets.assignedTo],
+        references: [users.id],
+    }),
+}));
+
+// -----------------------------------------------------------------------------
+// Asset Tracker Metadata
+// -----------------------------------------------------------------------------
+
+export const assetCategories = pgTable("ASSET_CATEGORY", {
+    id: uuid("id").primaryKey().defaultRandom(),
+    name: text("name").notNull().unique(),
+    managedById: uuid("managedById").references(() => users.id),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
+});
+
+export const assetLocations = pgTable("ASSET_LOCATION", {
+    id: uuid("id").primaryKey().defaultRandom(),
+    name: text("name").notNull().unique(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
+});
+
+export const assetReports = pgTable("ASSET_REPORT", {
+    id: uuid("id").primaryKey().defaultRandom(),
+    assetId: text("assetId").notNull().references(() => assets.id),
+    userId: uuid("userId").notNull().references(() => users.id),
+    comment: text("comment").notNull(),
+    status: reportStatusEnum("status").default("PENDING").notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
+});
+
+export const assetReportsRelations = relations(assetReports, ({ one }) => ({
+    asset: one(assets, {
+        fields: [assetReports.assetId],
+        references: [assets.id],
+    }),
+    user: one(users, {
+        fields: [assetReports.userId],
         references: [users.id],
     }),
 }));

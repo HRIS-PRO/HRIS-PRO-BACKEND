@@ -13,6 +13,17 @@ import departmentsRoutes from './modules/departments/departments.routes';
 import { locationsRoutes } from './modules/locations/locations.routes';
 import employeesRoutes from './modules/employees/employees.routes';
 import { assetsRoutes } from './modules/assets/assets.routes';
+import assetCategoriesRoutes from './modules/asset-categories/asset-categories.routes';
+import { assetLocationsRoutes } from './modules/asset-locations/asset-locations.routes';
+import usersRoutes from './modules/users/users.routes';
+import reportsRoutes from './modules/reports/reports.routes';
+import { wsRoutes } from './websocket/ws.routes';
+
+declare module 'fastify' {
+    interface FastifyInstance {
+        authenticate: (request: any, reply: any) => Promise<void>;
+    }
+}
 
 const buildApp = async (): Promise<FastifyInstance> => {
     const app = Fastify({
@@ -20,7 +31,12 @@ const buildApp = async (): Promise<FastifyInstance> => {
     }).withTypeProvider<ZodTypeProvider>();
 
     // Core plugins
-    await app.register(cors);
+    await app.register(cors, {
+        origin: '*', // Allow all origins (for development)
+        methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+        allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
+        credentials: true,
+    });
     await app.register(helmet);
     await app.register(jwt, {
         secret: env.JWT_SECRET,
@@ -34,6 +50,14 @@ const buildApp = async (): Promise<FastifyInstance> => {
     // Custom plugins
     await app.register(dbPlugin);
 
+    app.decorate('authenticate', async (request: any, reply: any) => {
+        try {
+            await request.jwtVerify();
+        } catch (err) {
+            reply.send(err);
+        }
+    });
+
     // Zod validation setup
     app.setValidatorCompiler(validatorCompiler);
     app.setSerializerCompiler(serializerCompiler);
@@ -43,12 +67,19 @@ const buildApp = async (): Promise<FastifyInstance> => {
         return { status: 'ok', timestamp: new Date().toISOString() };
     });
 
+    // Register WebSocket (must come before route modules that use it)
+    await app.register(wsRoutes);
+
     // Register modules
     await app.register(authRoutes, { prefix: '/auth' });
     await app.register(departmentsRoutes, { prefix: '/departments' });
     await app.register(locationsRoutes, { prefix: '/locations' });
     await app.register(employeesRoutes, { prefix: '/employees' });
     await app.register(assetsRoutes, { prefix: '/assets' });
+    await app.register(assetCategoriesRoutes, { prefix: '/asset-categories' });
+    await app.register(assetLocationsRoutes, { prefix: '/asset-locations' });
+    await app.register(usersRoutes, { prefix: '/users' });
+    await app.register(reportsRoutes, { prefix: '/reports' });
 
     return app;
 };
