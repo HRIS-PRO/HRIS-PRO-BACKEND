@@ -35,7 +35,7 @@ export class ReportsService {
         try {
             // Find the asset's category
             const [assetRow] = await this.db
-                .select({ category: assets.category, name: assets.name })
+                .select({ category: assets.category, name: assets.name, serialNumber: assets.serialNumber })
                 .from(assets)
                 .where(eq(assets.id, data.assetId));
 
@@ -53,6 +53,7 @@ export class ReportsService {
                             ...newReport,
                             assetName: assetRow.name,
                             assetCategory: assetRow.category,
+                            assetSerialNumber: assetRow.serialNumber,
                         },
                     });
                 }
@@ -62,7 +63,26 @@ export class ReportsService {
             console.error('WS broadcast error (report:created):', wsErr);
         }
 
-        return newReport;
+        // Fetch the newly created report with joined asset info to return a complete object
+        const [populatedReport] = await this.db
+            .select({
+                id: assetReports.id,
+                assetId: assetReports.assetId,
+                userId: assetReports.userId,
+                comment: assetReports.comment,
+                status: assetReports.status,
+                createdAt: assetReports.createdAt,
+                updatedAt: assetReports.updatedAt,
+                assetName: assets.name,
+                assetCategory: assets.category,
+                assetSerialNumber: assets.serialNumber,
+            })
+            .from(assetReports)
+            .leftJoin(assets, eq(assetReports.assetId, assets.id))
+            .where(eq(assetReports.id, newReport.id))
+            .limit(1);
+
+        return populatedReport || newReport;
     }
 
     async getReportsForManager(managerId: string) {
@@ -164,11 +184,12 @@ export class ReportsService {
                 updatedAt: assetReports.updatedAt,
                 assetName: assets.name,
                 assetCategory: assets.category,
-                userName: sql<string>`${employees.firstName} || ' ' || ${employees.surname}`,
+                assetSerialNumber: assets.serialNumber,
+                userName: sql<string>`COALESCE(${employees.firstName} || ' ' || ${employees.surname}, 'Unknown User')`,
             })
             .from(assetReports)
-            .innerJoin(assets, eq(assetReports.assetId, assets.id))
-            .innerJoin(employees, eq(assetReports.userId, employees.userId))
+            .leftJoin(assets, eq(assetReports.assetId, assets.id))
+            .leftJoin(employees, eq(assetReports.userId, employees.userId))
             .where(inArray(assets.category, categoryNames))
             .orderBy(sql`${assetReports.createdAt} DESC`);
 
@@ -176,13 +197,25 @@ export class ReportsService {
     }
 
     async getReportsForUser(userId: string) {
-        return this.db.query.assetReports.findMany({
-            where: eq(assetReports.userId, userId),
-            with: {
-                asset: true
-            },
-            orderBy: (reports: any, { desc }: any) => [desc(reports.createdAt)],
-        });
+        const results = await this.db
+            .select({
+                id: assetReports.id,
+                assetId: assetReports.assetId,
+                userId: assetReports.userId,
+                comment: assetReports.comment,
+                status: assetReports.status,
+                createdAt: assetReports.createdAt,
+                updatedAt: assetReports.updatedAt,
+                assetName: assets.name,
+                assetCategory: assets.category,
+                assetSerialNumber: assets.serialNumber,
+            })
+            .from(assetReports)
+            .leftJoin(assets, eq(assetReports.assetId, assets.id))
+            .where(eq(assetReports.userId, userId))
+            .orderBy(sql`${assetReports.createdAt} DESC`);
+
+        return results;
     }
 
     async updateReportStatus(reportId: string, status: 'PENDING' | 'IN_REVIEW' | 'RESOLVED') {

@@ -1,11 +1,585 @@
 {
-  "id": "76c40b30-a274-46a9-8b2d-5ce42ccea893",
-  "prevId": "098ba15a-a5c0-42fd-962f-f8d46467e667",
+  "id": "9667f52a-27d9-434b-85d9-8f7b3bf7fb97",
+  "prevId": "3f0b2b52-1567-4072-8ad2-f0e92ca08c23",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
-    "public.Department": {
-      "name": "Department",
+    "public.ASSET_CATEGORY": {
+      "name": "ASSET_CATEGORY",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "managedById": {
+          "name": "managedById",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "ASSET_CATEGORY_managedById_HRIS_USER_id_fk": {
+          "name": "ASSET_CATEGORY_managedById_HRIS_USER_id_fk",
+          "tableFrom": "ASSET_CATEGORY",
+          "tableTo": "HRIS_USER",
+          "columnsFrom": [
+            "managedById"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "ASSET_CATEGORY_name_unique": {
+          "name": "ASSET_CATEGORY_name_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "name"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.ASSET_LOCATION": {
+      "name": "ASSET_LOCATION",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "ASSET_LOCATION_name_unique": {
+          "name": "ASSET_LOCATION_name_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "name"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.ASSET_REPORT": {
+      "name": "ASSET_REPORT",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "assetId": {
+          "name": "assetId",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "userId": {
+          "name": "userId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "comment": {
+          "name": "comment",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "report_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'PENDING'"
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "ASSET_REPORT_assetId_ASSET_id_fk": {
+          "name": "ASSET_REPORT_assetId_ASSET_id_fk",
+          "tableFrom": "ASSET_REPORT",
+          "tableTo": "ASSET",
+          "columnsFrom": [
+            "assetId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "ASSET_REPORT_userId_HRIS_USER_id_fk": {
+          "name": "ASSET_REPORT_userId_HRIS_USER_id_fk",
+          "tableFrom": "ASSET_REPORT",
+          "tableTo": "HRIS_USER",
+          "columnsFrom": [
+            "userId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.ASSET": {
+      "name": "ASSET",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "category": {
+          "name": "category",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "assignedTo": {
+          "name": "assignedTo",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "department": {
+          "name": "department",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "manager": {
+          "name": "manager",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "status": {
+          "name": "status",
+          "type": "asset_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'IDLE'"
+        },
+        "purchaseDate": {
+          "name": "purchaseDate",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "purchasePrice": {
+          "name": "purchasePrice",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "condition": {
+          "name": "condition",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "location": {
+          "name": "location",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "serialNumber": {
+          "name": "serialNumber",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "fileUrl": {
+          "name": "fileUrl",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "ASSET_assignedTo_HRIS_USER_id_fk": {
+          "name": "ASSET_assignedTo_HRIS_USER_id_fk",
+          "tableFrom": "ASSET",
+          "tableTo": "HRIS_USER",
+          "columnsFrom": [
+            "assignedTo"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.BULK_CUSTOMER": {
+      "name": "BULK_CUSTOMER",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "customerType": {
+          "name": "customerType",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "customerExternalId": {
+          "name": "customerExternalId",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "title": {
+          "name": "title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "surname": {
+          "name": "surname",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "firstName": {
+          "name": "firstName",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "otherName": {
+          "name": "otherName",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "fullName": {
+          "name": "fullName",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "dob": {
+          "name": "dob",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "gender": {
+          "name": "gender",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "nationality": {
+          "name": "nationality",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "stateOfOrigin": {
+          "name": "stateOfOrigin",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "residentialState": {
+          "name": "residentialState",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "residentialTown": {
+          "name": "residentialTown",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "address": {
+          "name": "address",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "mobilePhone": {
+          "name": "mobilePhone",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "bvn": {
+          "name": "bvn",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "nin": {
+          "name": "nin",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "email": {
+          "name": "email",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "tin": {
+          "name": "tin",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "educationLevel": {
+          "name": "educationLevel",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "occupation": {
+          "name": "occupation",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "sector": {
+          "name": "sector",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "office": {
+          "name": "office",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "officePhone": {
+          "name": "officePhone",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "officeAddress": {
+          "name": "officeAddress",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "nextOfKin": {
+          "name": "nextOfKin",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "nextOfKinAddress": {
+          "name": "nextOfKinAddress",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "nextOfKinPhone": {
+          "name": "nextOfKinPhone",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "idCardType": {
+          "name": "idCardType",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "idCardNo": {
+          "name": "idCardNo",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "idIssueDate": {
+          "name": "idIssueDate",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "idExpiryDate": {
+          "name": "idExpiryDate",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "isPep": {
+          "name": "isPep",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "pepDetails": {
+          "name": "pepDetails",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "externalCreatedAt": {
+          "name": "externalCreatedAt",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.HRIS_DEPARTMENT": {
+      "name": "HRIS_DEPARTMENT",
       "schema": "",
       "columns": {
         "id": {
@@ -95,8 +669,8 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.Employee": {
-      "name": "Employee",
+    "public.HRIS_EMPLOYEE": {
+      "name": "HRIS_EMPLOYEE",
       "schema": "",
       "columns": {
         "id": {
@@ -197,56 +771,205 @@
       },
       "indexes": {},
       "foreignKeys": {
-        "Employee_userId_User_id_fk": {
-          "name": "Employee_userId_User_id_fk",
-          "tableFrom": "Employee",
+        "HRIS_EMPLOYEE_userId_HRIS_USER_id_fk": {
+          "name": "HRIS_EMPLOYEE_userId_HRIS_USER_id_fk",
+          "tableFrom": "HRIS_EMPLOYEE",
+          "tableTo": "HRIS_USER",
           "columnsFrom": [
             "userId"
           ],
-          "tableTo": "User",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         },
-        "Employee_departmentId_Department_id_fk": {
-          "name": "Employee_departmentId_Department_id_fk",
-          "tableFrom": "Employee",
+        "HRIS_EMPLOYEE_departmentId_HRIS_DEPARTMENT_id_fk": {
+          "name": "HRIS_EMPLOYEE_departmentId_HRIS_DEPARTMENT_id_fk",
+          "tableFrom": "HRIS_EMPLOYEE",
+          "tableTo": "HRIS_DEPARTMENT",
           "columnsFrom": [
             "departmentId"
           ],
-          "tableTo": "Department",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
-        "Employee_userId_unique": {
-          "name": "Employee_userId_unique",
+        "HRIS_EMPLOYEE_userId_unique": {
+          "name": "HRIS_EMPLOYEE_userId_unique",
+          "nullsNotDistinct": false,
           "columns": [
             "userId"
-          ],
-          "nullsNotDistinct": false
+          ]
         },
-        "Employee_workEmail_unique": {
-          "name": "Employee_workEmail_unique",
+        "HRIS_EMPLOYEE_workEmail_unique": {
+          "name": "HRIS_EMPLOYEE_workEmail_unique",
+          "nullsNotDistinct": false,
           "columns": [
             "workEmail"
-          ],
-          "nullsNotDistinct": false
+          ]
         }
       },
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.UserRole": {
-      "name": "UserRole",
+    "public.EQUIPMENT_REQUEST": {
+      "name": "EQUIPMENT_REQUEST",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "userId": {
+          "name": "userId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "categoryId": {
+          "name": "categoryId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "priority": {
+          "name": "priority",
+          "type": "request_priority",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'STANDARD'"
+        },
+        "justification": {
+          "name": "justification",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "request_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'PENDING_HOD'"
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "EQUIPMENT_REQUEST_userId_HRIS_USER_id_fk": {
+          "name": "EQUIPMENT_REQUEST_userId_HRIS_USER_id_fk",
+          "tableFrom": "EQUIPMENT_REQUEST",
+          "tableTo": "HRIS_USER",
+          "columnsFrom": [
+            "userId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "EQUIPMENT_REQUEST_categoryId_ASSET_CATEGORY_id_fk": {
+          "name": "EQUIPMENT_REQUEST_categoryId_ASSET_CATEGORY_id_fk",
+          "tableFrom": "EQUIPMENT_REQUEST",
+          "tableTo": "ASSET_CATEGORY",
+          "columnsFrom": [
+            "categoryId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.HRIS_LOCATION": {
+      "name": "HRIS_LOCATION",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "address": {
+          "name": "address",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "status": {
+          "name": "status",
+          "type": "location_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'ACTIVE'"
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.HRIS_USER_ROLE": {
+      "name": "HRIS_USER_ROLE",
       "schema": "",
       "columns": {
         "id": {
@@ -278,18 +1001,18 @@
       },
       "indexes": {},
       "foreignKeys": {
-        "UserRole_userId_User_id_fk": {
-          "name": "UserRole_userId_User_id_fk",
-          "tableFrom": "UserRole",
+        "HRIS_USER_ROLE_userId_HRIS_USER_id_fk": {
+          "name": "HRIS_USER_ROLE_userId_HRIS_USER_id_fk",
+          "tableFrom": "HRIS_USER_ROLE",
+          "tableTo": "HRIS_USER",
           "columnsFrom": [
             "userId"
           ],
-          "tableTo": "User",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -298,8 +1021,8 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.User": {
-      "name": "User",
+    "public.HRIS_USER": {
+      "name": "HRIS_USER",
       "schema": "",
       "columns": {
         "id": {
@@ -352,14 +1075,154 @@
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
-        "User_email_unique": {
-          "name": "User_email_unique",
+        "HRIS_USER_email_unique": {
+          "name": "HRIS_USER_email_unique",
+          "nullsNotDistinct": false,
           "columns": [
             "email"
-          ],
-          "nullsNotDistinct": false
+          ]
         }
       },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.WORKSPACE_MEMBER": {
+      "name": "WORKSPACE_MEMBER",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "workspaceId": {
+          "name": "workspaceId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "userId": {
+          "name": "userId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "joinedAt": {
+          "name": "joinedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "WORKSPACE_MEMBER_workspaceId_WORKSPACE_id_fk": {
+          "name": "WORKSPACE_MEMBER_workspaceId_WORKSPACE_id_fk",
+          "tableFrom": "WORKSPACE_MEMBER",
+          "tableTo": "WORKSPACE",
+          "columnsFrom": [
+            "workspaceId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "WORKSPACE_MEMBER_userId_HRIS_USER_id_fk": {
+          "name": "WORKSPACE_MEMBER_userId_HRIS_USER_id_fk",
+          "tableFrom": "WORKSPACE_MEMBER",
+          "tableTo": "HRIS_USER",
+          "columnsFrom": [
+            "userId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.WORKSPACE": {
+      "name": "WORKSPACE",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "title": {
+          "name": "title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "workspace_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'ACTIVE'"
+        },
+        "ownerId": {
+          "name": "ownerId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "logoUrl": {
+          "name": "logoUrl",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "WORKSPACE_ownerId_HRIS_USER_id_fk": {
+          "name": "WORKSPACE_ownerId_HRIS_USER_id_fk",
+          "tableFrom": "WORKSPACE",
+          "tableTo": "HRIS_USER",
+          "columnsFrom": [
+            "ownerId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
@@ -371,7 +1234,20 @@
       "schema": "public",
       "values": [
         "HRIS",
-        "ASSET_TRACKER"
+        "ASSET_TRACKER",
+        "MSGSCALE_BULK"
+      ]
+    },
+    "public.asset_status": {
+      "name": "asset_status",
+      "schema": "public",
+      "values": [
+        "ACTIVE",
+        "MAINTENANCE",
+        "PENDING",
+        "LOST",
+        "DECOMMISSIONED",
+        "IDLE"
       ]
     },
     "public.department_status": {
@@ -391,13 +1267,59 @@
         "ON_LEAVE",
         "TERMINATED"
       ]
+    },
+    "public.location_status": {
+      "name": "location_status",
+      "schema": "public",
+      "values": [
+        "ACTIVE",
+        "INACTIVE"
+      ]
+    },
+    "public.report_status": {
+      "name": "report_status",
+      "schema": "public",
+      "values": [
+        "PENDING",
+        "IN_REVIEW",
+        "RESOLVED"
+      ]
+    },
+    "public.request_priority": {
+      "name": "request_priority",
+      "schema": "public",
+      "values": [
+        "STANDARD",
+        "HIGH",
+        "CRITICAL"
+      ]
+    },
+    "public.request_status": {
+      "name": "request_status",
+      "schema": "public",
+      "values": [
+        "PENDING_HOD",
+        "PENDING_HOO",
+        "PENDING_CATEGORY_ADMIN",
+        "APPROVED",
+        "REJECTED"
+      ]
+    },
+    "public.workspace_status": {
+      "name": "workspace_status",
+      "schema": "public",
+      "values": [
+        "ACTIVE",
+        "MAINTENANCE",
+        "SUSPENDED"
+      ]
     }
   },
   "schemas": {},
-  "views": {},
   "sequences": {},
   "roles": {},
   "policies": {},
+  "views": {},
   "_meta": {
     "columns": {},
     "schemas": {},

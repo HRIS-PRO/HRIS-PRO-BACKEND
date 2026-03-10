@@ -8,6 +8,8 @@ export default async function employeesRoutes(app: FastifyInstance) {
     const employeesService = new EmployeesService(app.db);
     const employeesController = new EmployeesController(employeesService);
 
+    app.addHook('onRequest', app.authenticate);
+
     app.get(
         '/',
         employeesController.getAllEmployees.bind(employeesController)

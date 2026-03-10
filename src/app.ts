@@ -17,6 +17,10 @@ import assetCategoriesRoutes from './modules/asset-categories/asset-categories.r
 import { assetLocationsRoutes } from './modules/asset-locations/asset-locations.routes';
 import usersRoutes from './modules/users/users.routes';
 import reportsRoutes from './modules/reports/reports.routes';
+import { equipmentRequestsRoutes } from './modules/equipment-requests/equipment-requests.routes';
+import workspacesRoutes from './modules/workspaces/workspaces.routes';
+import templatesRoutes from './modules/templates/templates.routes';
+import { campaignsRoutes } from './modules/campaigns/campaigns.routes';
 import { wsRoutes } from './websocket/ws.routes';
 
 declare module 'fastify' {
@@ -80,6 +84,10 @@ const buildApp = async (): Promise<FastifyInstance> => {
     await app.register(assetLocationsRoutes, { prefix: '/asset-locations' });
     await app.register(usersRoutes, { prefix: '/users' });
     await app.register(reportsRoutes, { prefix: '/reports' });
+    await app.register(equipmentRequestsRoutes, { prefix: '/equipment-requests' });
+    await app.register(workspacesRoutes, { prefix: '/workspaces' });
+    await app.register(templatesRoutes, { prefix: '/templates' });
+    await app.register(campaignsRoutes, { prefix: '/campaigns' });
 
     return app;
 };

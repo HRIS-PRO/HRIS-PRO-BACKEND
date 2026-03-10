@@ -6,7 +6,7 @@ interface EmailPayload {
     htmlbody: string;
 }
 
-export async function sendEmail(
+export async function sendBulkEmail(
     to: string,
     subject: string,
     htmlContent: string,
@@ -14,20 +14,19 @@ export async function sendEmail(
     fromName?: string,
     fromEmail?: string
 ) {
-    // Basic HTML Wrapper for professional look
-    // The hidden div explicitly injects the preheader text right at the start of the body for Gmail/email clients
+    // Professional Nolt Finance Template
     const wrapper = `
     <!DOCTYPE html>
     <html>
     <head>
         <style>
-            body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f4f4; margin: 0; padding: 0; }
-            .container { max-width: 600px; margin: 20px auto; background: #ffffff; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); overflow: hidden; }
-            .header { background: #4F46E5; color: #ffffff; padding: 20px; text-align: center; }
-            .header h1 { margin: 0; font-size: 24px; }
-            .content { padding: 30px; color: #333333; line-height: 1.6; }
-            .footer { background: #f9fafb; padding: 15px; text-align: center; font-size: 12px; color: #666666; }
-            .otp-code { font-size: 32px; font-weight: bold; letter-spacing: 5px; color: #4F46E5; text-align: center; margin: 20px 0; }
+            body { font-family: 'Inter', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f8fafc; margin: 0; padding: 0; }
+            .container { max-width: 600px; margin: 40px auto; background: #ffffff; border-radius: 12px; border: 1px solid #e2e8f0; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.05); overflow: hidden; }
+            .header { background: #0f172a; color: #ffffff; padding: 24px; text-align: center; }
+            .header h1 { margin: 0; font-size: 24px; font-weight: 600; letter-spacing: 0.5px; }
+            .content { padding: 40px; color: #334155; line-height: 1.7; font-size: 16px; }
+            .footer { background: #f8fafc; padding: 20px; text-align: center; font-size: 13px; color: #64748b; border-top: 1px solid #e2e8f0; }
+            .footer p { margin: 5px 0; }
         </style>
     </head>
     <body>
@@ -36,13 +35,14 @@ export async function sendEmail(
         </div>
         <div class="container">
             <div class="header">
-                <h1>HRIS Pro</h1>
+                <h1>Nolt Finance</h1>
             </div>
             <div class="content">
                 ${htmlContent}
             </div>
             <div class="footer">
-                &copy; ${new Date().getFullYear()} HRIS Pro. All rights reserved.
+                <p>&copy; ${new Date().getFullYear()} Nolt Finance. All rights reserved.</p>
+                <p>You are receiving this email because you are a customer of Nolt Finance.</p>
             </div>
         </div>
     </body>
@@ -50,7 +50,7 @@ export async function sendEmail(
     `;
 
     if (env.NODE_ENV === 'test') {
-        console.log(`[TEST] Email to ${to}: ${subject}`);
+        console.log(`[TEST] Bulk Email to ${to}: ${subject}`);
         return;
     }
 
@@ -59,7 +59,7 @@ export async function sendEmail(
             {
                 email_address: {
                     address: to,
-                    name: to.split('@')[0], // Extract name from email
+                    name: to.split('@')[0],
                 },
             },
         ],
@@ -72,12 +72,12 @@ export async function sendEmail(
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                Authorization: env.ZEPTO_TOKEN,
+                Authorization: env.ZEPTO_BULK_TOKEN,
             },
             body: JSON.stringify({
                 from: {
                     address: fromEmail || env.ZEPTO_FROM_EMAIL,
-                    name: fromName || "HRIS Pro System"
+                    name: fromName || "Nolt Finance"
                 },
                 ...payload,
             }),
@@ -85,15 +85,14 @@ export async function sendEmail(
 
         if (!response.ok) {
             const errorText = await response.text();
-            console.error('ZeptoMail Error:', errorText);
-            throw new Error(`Failed to send email: ${response.statusText}`);
+            console.error('ZeptoMail Bulk Error:', errorText);
+            throw new Error(`Failed to send bulk email: ${response.statusText}`);
         }
 
         const data = await response.json();
-        console.log('Email sent successfully:', data);
+        console.log('Bulk email sent successfully:', data);
     } catch (error) {
-        console.error('Email sending failed:', error);
-        // In production, we might want to throw or queue a retry.
-        // For now, logging is enough.
+        console.error('Bulk email sending failed:', error);
+        throw error;
     }
-};
+}

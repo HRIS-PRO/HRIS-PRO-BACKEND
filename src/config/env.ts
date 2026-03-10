@@ -16,10 +16,18 @@ const schema = z.object({
     // ZeptoMail
     ZEPTO_FROM_EMAIL: z.string().email(),
     ZEPTO_TOKEN: z.string().min(1),
+    ZEPTO_BULK_TOKEN: z.string().min(1),
 
     // Supabase
     SUPABASE_URL: z.string().url(),
     SUPABASE_KEY: z.string().min(1),
+
+    // Termii SMS
+    TERMII_API_KEY: z.string().min(1),
+    TERMII_SECRET_KEY: z.string().min(1).optional(),
+
+    // Redis / BullMQ
+    REDIS_URL: z.string().url(),
 });
 
 const _env = schema.safeParse(process.env);

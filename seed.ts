@@ -26,7 +26,7 @@ async function main() {
         console.log(`ℹ️ User found: ${user.email}`);
     }
 
-    // Assign Role
+    // Assign HRIS Role
     const existingRole = await db.query.userRoles.findFirst({
         where: (roles, { and, eq }) => and(
             eq(roles.userId, user!.id),
@@ -43,6 +43,25 @@ async function main() {
         console.log(`✅ Assigned OWNER role for HRIS`);
     } else {
         console.log(`ℹ️ User already has HRIS role`);
+    }
+
+    // Assign ASSET_TRACKER Role
+    const existingAssetRole = await db.query.userRoles.findFirst({
+        where: (roles, { and, eq }) => and(
+            eq(roles.userId, user!.id),
+            eq(roles.app, 'ASSET_TRACKER')
+        )
+    });
+
+    if (!existingAssetRole) {
+        await db.insert(userRoles).values({
+            userId: user.id,
+            app: 'ASSET_TRACKER',
+            role: 'Super Admin',
+        });
+        console.log(`✅ Assigned Super Admin role for ASSET_TRACKER`);
+    } else {
+        console.log(`ℹ️ User already has ASSET_TRACKER role`);
     }
 
     console.log('🎉 Seeding complete!');

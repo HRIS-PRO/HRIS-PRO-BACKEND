@@ -1,0 +1,23 @@
+ALTER TABLE "BULK_CUSTOMER" ADD COLUMN "fullName" text;--> statement-breakpoint
+ALTER TABLE "BULK_CUSTOMER" ADD COLUMN "nationality" text;--> statement-breakpoint
+ALTER TABLE "BULK_CUSTOMER" ADD COLUMN "stateOfOrigin" text;--> statement-breakpoint
+ALTER TABLE "BULK_CUSTOMER" ADD COLUMN "residentialTown" text;--> statement-breakpoint
+ALTER TABLE "BULK_CUSTOMER" ADD COLUMN "address" text;--> statement-breakpoint
+ALTER TABLE "BULK_CUSTOMER" ADD COLUMN "bvn" text;--> statement-breakpoint
+ALTER TABLE "BULK_CUSTOMER" ADD COLUMN "nin" text;--> statement-breakpoint
+ALTER TABLE "BULK_CUSTOMER" ADD COLUMN "tin" text;--> statement-breakpoint
+ALTER TABLE "BULK_CUSTOMER" ADD COLUMN "educationLevel" text;--> statement-breakpoint
+ALTER TABLE "BULK_CUSTOMER" ADD COLUMN "occupation" text;--> statement-breakpoint
+ALTER TABLE "BULK_CUSTOMER" ADD COLUMN "sector" text;--> statement-breakpoint
+ALTER TABLE "BULK_CUSTOMER" ADD COLUMN "office" text;--> statement-breakpoint
+ALTER TABLE "BULK_CUSTOMER" ADD COLUMN "officePhone" text;--> statement-breakpoint
+ALTER TABLE "BULK_CUSTOMER" ADD COLUMN "officeAddress" text;--> statement-breakpoint
+ALTER TABLE "BULK_CUSTOMER" ADD COLUMN "nextOfKin" text;--> statement-breakpoint
+ALTER TABLE "BULK_CUSTOMER" ADD COLUMN "nextOfKinAddress" text;--> statement-breakpoint
+ALTER TABLE "BULK_CUSTOMER" ADD COLUMN "nextOfKinPhone" text;--> statement-breakpoint
+ALTER TABLE "BULK_CUSTOMER" ADD COLUMN "idCardType" text;--> statement-breakpoint
+ALTER TABLE "BULK_CUSTOMER" ADD COLUMN "idCardNo" text;--> statement-breakpoint
+ALTER TABLE "BULK_CUSTOMER" ADD COLUMN "idIssueDate" text;--> statement-breakpoint
+ALTER TABLE "BULK_CUSTOMER" ADD COLUMN "idExpiryDate" text;--> statement-breakpoint
+ALTER TABLE "BULK_CUSTOMER" ADD COLUMN "isPep" text;--> statement-breakpoint
+ALTER TABLE "BULK_CUSTOMER" ADD COLUMN "pepDetails" text;

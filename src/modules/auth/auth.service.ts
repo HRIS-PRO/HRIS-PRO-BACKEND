@@ -18,21 +18,22 @@ export class AuthService {
         });
 
         if (!user) {
-            // Security: Do not reveal user existence.
+            // Security: Use same error message as password failure to prevent enumeration in UI message,
+            // though we console.warn for internal logs.
             console.warn(`Login attempt for non-existent user: ${email}`);
-            return;
+            throw new Error('Invalid email or password');
         }
 
         // Verify Password
         if (!user.passwordHash) {
             console.warn(`User ${email} has no password set.`);
-            return;
+            throw new Error('Invalid email or password');
         }
 
         const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
         if (!isPasswordValid) {
             console.warn(`Invalid password for user: ${email}`);
-            return;
+            throw new Error('Invalid email or password');
         }
 
         // Generate 6-digit OTP
@@ -69,6 +70,7 @@ export class AuthService {
             where: eq(users.email, email),
             with: {
                 roles: true,
+                employee: true,
             },
         });
 
@@ -92,6 +94,34 @@ export class AuthService {
                 otpExpiresAt: null,
             })
             .where(eq(users.id, user.id));
+
+        return user;
+    }
+
+    async verifyDirectLogin(email: string, password: string) {
+        // Find user by email
+        const user = await this.db.query.users.findFirst({
+            where: eq(users.email, email),
+            with: {
+                roles: true,
+                employee: true,
+            },
+        });
+
+        if (!user || !user.passwordHash) {
+            throw new Error('Invalid email or password');
+        }
+
+        const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
+        if (!isPasswordValid) {
+            throw new Error('Invalid email or password');
+        }
+
+        // Enforce MsgScale role check
+        const msgScaleRole = user.roles.find(r => r.app === 'MSGSCALE_BULK');
+        if (!msgScaleRole) {
+            throw new Error('You do not have permission to access MsgScale Bulk Messaging. Please contact an administrator.');
+        }
 
         return user;
     }

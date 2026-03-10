@@ -31,12 +31,16 @@
     "@fastify/websocket": "^11.2.0",
     "@supabase/supabase-js": "^2.97.0",
     "bcryptjs": "^3.0.3",
+    "bullmq": "^5.70.4",
     "dotenv": "^17.3.1",
     "dotenv-expand": "^12.0.3",
     "drizzle-orm": "^0.45.1",
     "fastify": "^5.7.4",
     "fastify-type-provider-zod": "^6.1.0",
+    "ioredis": "^5.10.0",
+    "pg": "^8.20.0",
     "postgres": "^3.4.8",
+    "sharp": "^0.34.5",
     "zod": "^4.3.6"
   },
   "devDependencies": {

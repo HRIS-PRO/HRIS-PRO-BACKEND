@@ -26,4 +26,14 @@ export default async function authRoutes(app: FastifyInstance) {
         },
         authController.verifyOtp.bind(authController)
     );
+
+    app.post(
+        '/direct-login',
+        {
+            schema: {
+                body: loginSchema,
+            },
+        },
+        authController.directLogin.bind(authController)
+    );
 }

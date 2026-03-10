@@ -5,36 +5,22 @@
     {
       "idx": 0,
       "version": "7",
-      "when": 1771512620317,
-      "tag": "0000_clean_fallen_one",
+      "when": 1772621938889,
+      "tag": "0000_thankful_rocket_raccoon",
       "breakpoints": true
     },
     {
       "idx": 1,
       "version": "7",
-      "when": 1771521239121,
-      "tag": "0001_great_network",
+      "when": 1772794548513,
+      "tag": "0001_abandoned_martin_li",
       "breakpoints": true
     },
     {
       "idx": 2,
       "version": "7",
-      "when": 1771935563085,
-      "tag": "0002_create_assets_table",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "7",
-      "when": 1772530452390,
-      "tag": "0003_grey_jasper_sitwell",
-      "breakpoints": true
-    },
-    {
-      "idx": 4,
-      "version": "7",
-      "when": 1772542281156,
-      "tag": "0004_windy_firedrake",
+      "when": 1772796758467,
+      "tag": "0002_thankful_betty_brant",
       "breakpoints": true
     }
   ]

@@ -8,7 +8,9 @@ import { WebSocket } from '@fastify/websocket';
 
 export type WsEvent =
     | { type: 'report:created'; payload: Record<string, any> }
-    | { type: 'report:status_updated'; payload: Record<string, any> };
+    | { type: 'report:status_updated'; payload: Record<string, any> }
+    | { type: 'request:created'; payload: Record<string, any> }
+    | { type: 'request:status_updated'; payload: Record<string, any> };
 
 class WsManager {
     /** userId → Set of open WebSocket connections (a user may have multiple tabs) */
@@ -54,8 +56,8 @@ class WsManager {
     }
 
     /** Broadcast to EVERY connected client (admin broadcasts etc.). */
-    broadcast(event: WsEvent): void {
-        const message = JSON.stringify(event);
+    broadcast(type: string, payload: any): void {
+        const message = JSON.stringify({ type, payload });
         for (const sockets of this.connections.values()) {
             for (const socket of sockets) {
                 if (socket.readyState === socket.OPEN) {
