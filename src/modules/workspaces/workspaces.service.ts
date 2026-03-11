@@ -373,8 +373,8 @@ export class WorkspacesService {
     }
 
     async updateBulkCustomer(id: string, data: any) {
-        // Prevent accidental updates to these sensitive fields just in case
-        const { bvn, nin, ...safeData } = data;
+        // Prevent accidental updates to these sensitive or system fields
+        const { bvn, nin, id: _id, createdAt, updatedAt, externalCreatedAt, ...safeData } = data;
 
         const [updated] = await this.db.update(bulkCustomers)
             .set({
