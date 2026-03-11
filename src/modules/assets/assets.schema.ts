@@ -18,4 +18,15 @@ export const acceptAssetSchema = z.object({
     id: z.string().min(1),
 });
 
+export const reassignAssetSchema = z.object({
+    assetId: z.string().min(1),
+    assignedTo: z.string().min(1),
+    department: z.string().min(1),
+    manager: z.string().min(1),
+});
+
+export const decommissionAssetSchema = z.object({
+    assetId: z.string().min(1)
+});
+
 export type CreateAssetInput = z.infer<typeof createAssetSchema>;

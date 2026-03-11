@@ -32,4 +32,16 @@ export async function assetsRoutes(app: FastifyInstance) {
         '/:id/assign',
         assetsController.assignAsset.bind(assetsController)
     );
+
+    app.put(
+        '/:id/reassign',
+        { preHandler: [app.authenticate] },
+        assetsController.reassignAsset.bind(assetsController)
+    );
+
+    app.put(
+        '/:id/decommission',
+        { preHandler: [app.authenticate] },
+        assetsController.decommissionAsset.bind(assetsController)
+    );
 }

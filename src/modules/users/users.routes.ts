@@ -9,4 +9,8 @@ export default async function usersRoutes(app: FastifyInstance) {
     app.get('/super-admins', {
         preHandler: [app.authenticate]
     }, usersController.getSuperAdmins.bind(usersController));
+
+    app.get('/apps/asset-tracker', {
+        preHandler: [app.authenticate]
+    }, usersController.getAssetTrackerUsers.bind(usersController));
 }

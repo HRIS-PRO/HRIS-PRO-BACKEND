@@ -11,8 +11,9 @@ export async function wsRoutes(app: FastifyInstance) {
      * The client passes the JWT as a query-param because browser
      * WebSocket API does not support custom headers.
      */
-    app.get('/ws', { websocket: true }, async (socket, request: FastifyRequest<{ Querystring: { token?: string } }>) => {
+    app.get('/ws', { websocket: true }, async (connection: any, request: FastifyRequest<{ Querystring: { token?: string } }>) => {
         let userId: string | null = null;
+        const socket = connection.socket;
 
         try {
             const token = (request.query as any).token as string | undefined;

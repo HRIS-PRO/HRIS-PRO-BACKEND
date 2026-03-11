@@ -111,4 +111,29 @@ export class AssetsController {
             return reply.status(500).send({ message: error.message || 'Failed to bulk assign assets' });
         }
     }
+
+    async reassignAsset(request: FastifyRequest<{ Params: { id: string }, Body: { assignedTo: string; manager: string; department: string } }>, reply: FastifyReply) {
+        try {
+            const { id } = request.params;
+            const data = request.body;
+            
+            // Should verify user is super-admin here or rely on route guard
+            const updatedAsset = await this.assetsService.reassignAsset(id, data);
+            return reply.send(updatedAsset);
+        } catch (error: any) {
+            request.log.error(error);
+            return reply.status(500).send({ message: error.message || 'Failed to reassign asset' });
+        }
+    }
+
+    async decommissionAsset(request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) {
+        try {
+            const { id } = request.params;
+            const updatedAsset = await this.assetsService.decommissionAsset(id);
+            return reply.send(updatedAsset);
+        } catch (error: any) {
+            request.log.error(error);
+            return reply.status(500).send({ message: error.message || 'Failed to decommission asset' });
+        }
+    }
 }

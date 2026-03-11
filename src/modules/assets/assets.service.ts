@@ -156,6 +156,60 @@ export class AssetsService {
         return updatedAssets.filter(Boolean);
     }
 
+    async reassignAsset(id: string, data: { assignedTo: string; manager: string; department: string }) {
+        const [updatedAsset] = await this.db.update(assets)
+            .set({
+                assignedTo: data.assignedTo,
+                manager: data.manager,
+                department: data.department,
+                status: 'PENDING'
+            })
+            .where(eq(assets.id, id))
+            .returning();
+
+        if (!updatedAsset) {
+            throw new Error(`Asset with id ${id} not found`);
+        }
+
+        // Fetch assignee email
+        const assignee = await this.db.query.users.findFirst({
+            where: eq(users.id, data.assignedTo),
+        });
+
+        if (assignee) {
+            await sendEmail(
+                assignee.email,
+                'New Asset Reassignment Pending Review',
+                `
+                    <h2>Asset Reassignment Review</h2>
+                    <p>Hello,</p>
+                    <p>You have been reassigned an existing asset: <strong>${updatedAsset.name}</strong> (${updatedAsset.id}).</p>
+                    <p>Please log in to AssetTrackPro and accept or report this assignment from your dashboard.</p>
+                    <br/>
+                    <p>Best regards,<br/>AssetTrackPro System</p>
+                `
+            ).catch(e => console.error("Email send failed for reassignment:", e));
+        }
+
+        return updatedAsset;
+    }
+
+    async decommissionAsset(id: string) {
+        const [updatedAsset] = await this.db.update(assets)
+            .set({
+                status: 'DECOMMISSIONED',
+                assignedTo: null
+            })
+            .where(eq(assets.id, id))
+            .returning();
+
+        if (!updatedAsset) {
+            throw new Error(`Asset with id ${id} not found`);
+        }
+
+        return updatedAsset;
+    }
+
     async getAllAssets() {
         return this.db.query.assets.findMany();
     }
