@@ -76,6 +76,11 @@ export default async function workspacesRoutes(app: FastifyInstance) {
         workspacesController.bulkAddCustomers.bind(workspacesController)
     );
 
+    app.patch(
+        '/customers/:id',
+        workspacesController.updateBulkCustomer.bind(workspacesController)
+    );
+
     app.get(
         '/customers',
         workspacesController.getBulkCustomers.bind(workspacesController)

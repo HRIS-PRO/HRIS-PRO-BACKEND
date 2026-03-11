@@ -1,9 +1,10 @@
 import { eq, and, sql } from 'drizzle-orm';
 import { db } from '../../db';
-import { campaigns, campaignRecipients, campaignAnalytics, groupMembers, bulkCustomers } from '../../db/schema';
+import { workspaces, campaigns, campaignRecipients, campaignAnalytics, groupMembers, bulkCustomers, workspaceMembers, userRoles, users } from '../../db/schema';
 import { CreateCampaignInput, UpdateCampaignInput } from './campaigns.schema';
 import { CampaignsEngine } from './campaigns.engine';
 import { sendBulkEmail } from './zepto-bulk.service';
+import { sendEmail } from '../shared/zepto';
 
 type DrizzleClient = typeof db;
 
@@ -171,7 +172,7 @@ export class CampaignsService {
         });
     }
 
-    async submitCampaign(id: string, workspaceId: string) {
+    async submitCampaign(id: string, workspaceId: string, actorId: string) {
         const [updated] = await this.db.update(campaigns)
             .set({ status: 'PENDING' })
             .where(and(
@@ -180,7 +181,94 @@ export class CampaignsService {
                 eq(campaigns.status, 'DRAFT')
             ))
             .returning();
+
+        if (updated) {
+            this.notifyApprovers(workspaceId, id, actorId).catch(err => {
+                console.error(`Failed to notify approvers for campaign ${id}:`, err);
+            });
+        }
+
         return updated;
+    }
+
+    async resendApprovalNotification(id: string, workspaceId: string, actorId: string) {
+        const existing = await this.db.query.campaigns.findFirst({
+            where: and(
+                eq(campaigns.id, id),
+                eq(campaigns.workspaceId, workspaceId),
+                eq(campaigns.status, 'PENDING')
+            )
+        });
+
+        if (!existing) {
+            throw new Error("Campaign not found or not in PENDING state.");
+        }
+
+        await this.notifyApprovers(workspaceId, id, actorId);
+        return existing;
+    }
+
+    private async notifyApprovers(workspaceId: string, campaignId: string, actorId: string) {
+        const workspace = await this.db.query.workspaces.findFirst({
+            where: eq(workspaces.id, workspaceId),
+        });
+
+        const campaign = await this.db.query.campaigns.findFirst({
+            where: eq(campaigns.id, campaignId),
+        });
+
+        if (!workspace || !campaign) return;
+
+        const actor = await this.db.query.users.findFirst({
+            where: eq(users.id, actorId),
+            with: { employee: true },
+        });
+
+        const actorName = (actor as any)?.employee
+            ? `${(actor as any).employee.firstName} ${(actor as any).employee.surname}`
+            : actor?.email || 'A user';
+
+        // Find all Admins or Managers in the workspace for MSGSCALE_BULK
+        const members = await this.db.select({ userRole: userRoles.role, email: users.email, firstName: sql<string>`${users.id}` /* Dummy for now, we'll fetch full user if needed */ })
+            .from(workspaceMembers)
+            .innerJoin(users, eq(workspaceMembers.userId, users.id))
+            .innerJoin(userRoles, eq(users.id, userRoles.userId))
+            .where(and(
+                eq(workspaceMembers.workspaceId, workspaceId),
+                eq(userRoles.app, 'MSGSCALE_BULK')
+            ));
+
+        const eligibleApprovers = members.filter(m => m.userRole === 'Admin' || m.userRole === 'Manager');
+
+        // Deduplicate by email
+        const uniqueEmails = Array.from(new Set(eligibleApprovers.map(m => m.email)));
+
+        for (const email of uniqueEmails) {
+            const emailHtml = `
+                <div style="line-height:1.8;color:#1a1a2e">
+                    <div style="background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);padding:40px 32px;border-radius:12px 12px 0 0;text-align:center">
+                        <h1 style="margin:0;color:#fff;font-size:28px;font-weight:900">Campaign Requires Approval 📋</h1>
+                        <p style="color:rgba(255,255,255,0.85);margin-top:8px;font-size:14px">MsgScale Workspace: ${workspace.title}</p>
+                    </div>
+                    <div style="padding:40px 32px">
+                        <p style="font-size:16px">Hi there,</p>
+                        <p><strong>${actorName}</strong> has submitted a campaign that requires your review and approval in the <strong style="color:#667eea">"${workspace.title}"</strong> workspace.</p>
+                        <div style="background:#f5f3ff;border-left:4px solid #667eea;padding:16px 20px;border-radius:8px;margin:24px 0">
+                            <p style="margin:0;font-size:12px;color:#6d28d9;font-weight:700;text-transform:uppercase;letter-spacing:1px">Campaign Details</p>
+                            <p style="margin:8px 0 0;font-size:14px"><strong>Name:</strong> ${campaign.name}</p>
+                            <p style="margin:4px 0 0;font-size:14px"><strong>Channel:</strong> ${campaign.channel}</p>
+                            <p style="margin:4px 0 0;font-size:14px"><strong>Submitted by:</strong> ${actorName}</p>
+                        </div>
+                        <p style="font-size:14px;color:#555">Please log in to review the details and approve or reject the broadcast.</p>
+                        <div style="text-align:center;margin-top:32px">
+                            <a href="#" style="display:inline-block;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;padding:14px 36px;border-radius:50px;text-decoration:none;font-weight:900;font-size:14px">Review Campaign →</a>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            sendEmail(email, `Approval Required: Campaign "${campaign.name}"`, emailHtml).catch(console.error);
+        }
     }
 
     async approveCampaign(id: string, workspaceId: string, approverId: string, action: 'APPROVE' | 'REJECT') {

@@ -36,6 +36,9 @@ export async function campaignsRoutes(app: FastifyInstance) {
     // Submit for approval
     app.post('/:workspaceId/:id/submit', (request: any, reply) => campaignsController.submitCampaign(request, reply));
 
+    // Resend approval notification
+    app.post('/:workspaceId/:id/resend-approval', (request: any, reply) => campaignsController.resendApprovalNotification(request, reply));
+
     // Approve or Reject
     app.post('/:workspaceId/:id/review', {
         schema: {

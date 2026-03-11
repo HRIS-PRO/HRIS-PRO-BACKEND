@@ -181,6 +181,20 @@ export class WorkspacesController {
         }
     }
 
+    async updateBulkCustomer(
+        request: FastifyRequest<{ Params: { id: string }, Body: any }>,
+        reply: FastifyReply
+    ) {
+        const { id } = request.params;
+        const data = request.body;
+        try {
+            const result = await this.workspacesService.updateBulkCustomer(id, data);
+            return reply.send(result);
+        } catch (error: any) {
+            return reply.code(400).send({ message: error.message || 'Failed to update customer' });
+        }
+    }
+
     async getBulkCustomers(
         request: FastifyRequest,
         reply: FastifyReply

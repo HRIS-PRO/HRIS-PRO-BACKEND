@@ -47,19 +47,35 @@ export class WorkspacesService {
             }).returning();
 
             // 2. Add the owner as the first member
-            await tx.insert(workspaceMembers).values({
-                workspaceId: newWorkspace.id,
-                userId: userId,
-            });
+            const memberSet = new Set<string>();
+            memberSet.add(userId);
 
             // 3. Add additional members if provided
             if (data.members && data.members.length > 0) {
-                const memberInserts = data.members.map(memberId => ({
-                    workspaceId: newWorkspace.id,
-                    userId: memberId,
-                }));
-                await tx.insert(workspaceMembers).values(memberInserts);
+                for (const m of data.members) {
+                    memberSet.add(m);
+                }
             }
+
+            // 4. Automatically add all MSGSCALE_BULK Admins
+            const adminUsers = await tx.select({ userId: userRoles.userId })
+                .from(userRoles)
+                .where(and(
+                    eq(userRoles.app, 'MSGSCALE_BULK'),
+                    eq(userRoles.role, 'Admin')
+                ));
+
+            for (const admin of adminUsers) {
+                memberSet.add(admin.userId);
+            }
+
+            // 5. Insert all gathered members
+            const memberInserts = Array.from(memberSet).map(memberId => ({
+                workspaceId: newWorkspace.id,
+                userId: memberId,
+            }));
+
+            await tx.insert(workspaceMembers).values(memberInserts);
 
             return newWorkspace;
         });
@@ -354,6 +370,21 @@ export class WorkspacesService {
         }
 
         return { added: validCustomers.length, skipped };
+    }
+
+    async updateBulkCustomer(id: string, data: any) {
+        // Prevent accidental updates to these sensitive fields just in case
+        const { bvn, nin, ...safeData } = data;
+
+        const [updated] = await this.db.update(bulkCustomers)
+            .set({
+                ...safeData,
+                updatedAt: new Date()
+            })
+            .where(eq(bulkCustomers.id, id))
+            .returning();
+
+        return updated;
     }
 
     async getBulkCustomers() {
