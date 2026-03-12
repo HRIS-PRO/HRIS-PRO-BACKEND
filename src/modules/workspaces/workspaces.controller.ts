@@ -196,12 +196,16 @@ export class WorkspacesController {
     }
 
     async getBulkCustomers(
-        request: FastifyRequest,
+        request: FastifyRequest<{ Querystring: { page?: string, limit?: string, search?: string } }>,
         reply: FastifyReply
     ) {
         try {
-            const customers = await this.workspacesService.getBulkCustomers();
-            return reply.send(customers);
+            const page = parseInt(request.query.page || '1', 10);
+            const limit = parseInt(request.query.limit || '20', 10);
+            const search = request.query.search || '';
+            
+            const result = await this.workspacesService.getBulkCustomers(page, limit, search);
+            return reply.send(result);
         } catch (error: any) {
             return reply.code(500).send({ message: error.message || 'Failed to fetch customers' });
         }

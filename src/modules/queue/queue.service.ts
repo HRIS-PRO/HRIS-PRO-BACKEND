@@ -38,3 +38,22 @@ export const addCampaignJob = async (jobId: string, payload: CampaignJobPayload,
         delay: delayMs > 0 ? delayMs : undefined,
     });
 };
+
+export const CAMPAIGN_SCHEDULER_QUEUE_NAME = 'campaign-scheduler';
+
+export const campaignSchedulerQueue = new Queue<any>(CAMPAIGN_SCHEDULER_QUEUE_NAME, {
+    connection: connection as any,
+    defaultJobOptions: {
+        removeOnComplete: true,
+        removeOnFail: false,
+    },
+});
+
+export const addSchedulerJob = async () => {
+    await campaignSchedulerQueue.add('check-campaigns', {}, {
+        repeat: {
+            pattern: '0 * * * *', // Run at the top of every hour
+        },
+        jobId: 'campaign-scheduler-job' // Ensure only one instance of the repeatable job exists
+    });
+};

@@ -1,11 +1,12 @@
 import { Worker, Job } from 'bullmq';
 import { connection } from './redis';
-import { CampaignJobPayload, CAMPAIGN_QUEUE_NAME } from './queue.service';
+import { CampaignJobPayload, CAMPAIGN_QUEUE_NAME, CAMPAIGN_SCHEDULER_QUEUE_NAME, addSchedulerJob } from './queue.service';
 import { sendBulkEmail } from '../campaigns/zepto-bulk.service';
 import { sendSms } from '../shared/termii';
 import { db } from '../../db';
 import { campaignAnalytics, campaigns } from '../../db/schema';
 import { eq } from 'drizzle-orm';
+import { CampaignsEngine } from '../campaigns/campaigns.engine';
 
 const processCampaignMessage = async (job: Job<CampaignJobPayload>) => {
     const { data } = job;
@@ -69,6 +70,25 @@ campaignWorker.on('failed', (job: Job | undefined, err: Error) => {
     console.error(`[Worker] Job ${job?.id} has failed with ${err.message}`);
 });
 
+// Create the Scheduler Worker
+export const campaignSchedulerWorker = new Worker(CAMPAIGN_SCHEDULER_QUEUE_NAME, async (job: Job) => {
+    console.log(`[Scheduler] Running campaign checks at ${new Date().toISOString()}`);
+    const engine = new CampaignsEngine(db as any);
+    await engine.processScheduledCampaigns();
+}, {
+    connection: connection as any,
+    concurrency: 1, // Only run one scheduler check at a time
+});
+
+campaignSchedulerWorker.on('completed', (job: Job) => {
+    console.log(`[Scheduler] Job ${job.id} completed checks.`);
+});
+
+campaignSchedulerWorker.on('failed', (job: Job | undefined, err: Error) => {
+    console.error(`[Scheduler] Job ${job?.id} failed checks: ${err.message}`);
+});
+
 export const startWorker = () => {
-    console.log('[Worker] Campaign Worker Started');
+    console.log('[Worker] Campaign Workers Started');
+    addSchedulerJob().catch(err => console.error('[Scheduler] Failed to add repeatable job', err));
 };

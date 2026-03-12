@@ -12,6 +12,15 @@ export const createCampaignSchema = z.object({
     }),
     scheduledAt: z.string().optional().nullable(),
     throttleRate: z.number().optional().nullable(),
+    cycleConfig: z.object({
+        type: z.enum(['daily', 'weekly']),
+        dayOfWeek: z.number().nullable(),
+        time: z.string()
+    }).optional().nullable(),
+    anniversaryConfig: z.object({
+        field: z.string(),
+        time: z.string()
+    }).optional().nullable(),
     recipients: z.array(z.object({
         groupId: z.string().uuid(),
         isExcluded: z.boolean().default(false),

@@ -405,6 +405,8 @@ export const campaigns = pgTable("CAMPAIGN", {
     content: jsonb("content").notNull(), // { subject?, preheader?, body, metadata? }
     scheduledAt: timestamp("scheduledAt"),
     throttleRate: integer("throttleRate"), // msg/hr
+    cycleConfig: jsonb("cycleConfig"),
+    anniversaryConfig: jsonb("anniversaryConfig"),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
 });
