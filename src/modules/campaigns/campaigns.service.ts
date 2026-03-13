@@ -261,7 +261,7 @@ export class CampaignsService {
                         </div>
                         <p style="font-size:14px;color:#555">Please log in to review the details and approve or reject the broadcast.</p>
                         <div style="text-align:center;margin-top:32px">
-                            <a href="#" style="display:inline-block;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;padding:14px 36px;border-radius:50px;text-decoration:none;font-weight:900;font-size:14px">Review Campaign →</a>
+                            <a href="https://msg.noltfinance.com/campaigns/${campaignId}" style="display:inline-block;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;padding:14px 36px;border-radius:50px;text-decoration:none;font-weight:900;font-size:14px">Review Campaign →</a>
                         </div>
                     </div>
                 </div>
