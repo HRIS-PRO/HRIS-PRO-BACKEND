@@ -1,4 +1,4 @@
-import { eq, and, inArray, notInArray, sql, or, like } from 'drizzle-orm';
+import { eq, and, inArray, notInArray, sql, or, like, ilike } from 'drizzle-orm';
 import { db } from '../../db';
 import { workspaces, workspaceMembers, users, userRoles, employees, bulkCustomers, groups, groupMembers, groupRules, campaigns, campaignAnalytics } from '../../db/schema';
 import { CreateWorkspaceInput, UpdateWorkspaceInput } from './workspaces.schema';
@@ -388,19 +388,17 @@ export class WorkspacesService {
     }
 
     async getBulkCustomers(page: number = 1, limit: number = 20, search: string = '') {
-        const offset = (page - 1) * limit;
-
         const searchPattern = search ? `%${search}%` : null;
         
         const baseQueryConditions = searchPattern 
             ? or(
-                like(bulkCustomers.firstName, searchPattern),
-                like(bulkCustomers.surname, searchPattern),
-                like(bulkCustomers.email, searchPattern),
-                like(bulkCustomers.mobilePhone, searchPattern),
-                like(bulkCustomers.otherName, searchPattern),
-                like(bulkCustomers.customerType, searchPattern),
-                like(bulkCustomers.occupation, searchPattern)
+                ilike(bulkCustomers.firstName, searchPattern),
+                ilike(bulkCustomers.surname, searchPattern),
+                ilike(bulkCustomers.email, searchPattern),
+                ilike(bulkCustomers.mobilePhone, searchPattern),
+                ilike(bulkCustomers.otherName, searchPattern),
+                ilike(bulkCustomers.customerType, searchPattern),
+                ilike(bulkCustomers.occupation, searchPattern)
             )
             : undefined;
 
@@ -409,6 +407,12 @@ export class WorkspacesService {
             .where(baseQueryConditions);
             
         const total = totalCountResult?.count || 0;
+
+        let offset = (page - 1) * limit;
+        if (offset >= total && total > 0) {
+            page = 1;
+            offset = 0;
+        }
 
         const customers = await this.db.query.bulkCustomers.findMany({
             where: baseQueryConditions,

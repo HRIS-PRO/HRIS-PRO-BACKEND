@@ -12,7 +12,8 @@ export async function sendEmail(
     htmlContent: string,
     preheader: string = '',
     fromName?: string,
-    fromEmail?: string
+    fromEmail?: string,
+    appName: string = 'HRIS Pro'
 ) {
     // Basic HTML Wrapper for professional look
     // The hidden div explicitly injects the preheader text right at the start of the body for Gmail/email clients
@@ -36,13 +37,13 @@ export async function sendEmail(
         </div>
         <div class="container">
             <div class="header">
-                <h1>HRIS Pro</h1>
+                <h1>${appName}</h1>
             </div>
             <div class="content">
                 ${htmlContent}
             </div>
             <div class="footer">
-                &copy; ${new Date().getFullYear()} HRIS Pro. All rights reserved.
+                &copy; ${new Date().getFullYear()} ${appName}. All rights reserved.
             </div>
         </div>
     </body>
@@ -77,7 +78,7 @@ export async function sendEmail(
             body: JSON.stringify({
                 from: {
                     address: fromEmail || env.ZEPTO_FROM_EMAIL,
-                    name: fromName || "HRIS Pro System"
+                    name: fromName || `${appName} System`
                 },
                 ...payload,
             }),

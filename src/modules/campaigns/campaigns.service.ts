@@ -241,33 +241,35 @@ export class CampaignsService {
         const eligibleApprovers = members.filter(m => m.userRole === 'Admin' || m.userRole === 'Manager');
 
         // Deduplicate by email
-        const uniqueEmails = Array.from(new Set(eligibleApprovers.map(m => m.email)));
+        const uniqueEmails = Array.from(new Set(eligibleApprovers.map(m => m.email.toLowerCase())));
 
         for (const email of uniqueEmails) {
             const emailHtml = `
-                <div style="line-height:1.8;color:#1a1a2e">
-                    <div style="background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);padding:40px 32px;border-radius:12px 12px 0 0;text-align:center">
-                        <h1 style="margin:0;color:#fff;font-size:28px;font-weight:900">Campaign Requires Approval 📋</h1>
-                        <p style="color:rgba(255,255,255,0.85);margin-top:8px;font-size:14px">MsgScale Workspace: ${workspace.title}</p>
+                <div style="padding: 10px 0;">
+                    <p style="font-size:16px;">Hi there,</p>
+                    <p><strong>${actorName}</strong> has submitted a campaign that requires your review and approval in the <strong style="color:#4F46E5">"${workspace.title}"</strong> workspace.</p>
+                    <div style="background:#f5f3ff;border-left:4px solid #4F46E5;padding:16px 20px;border-radius:8px;margin:24px 0">
+                        <p style="margin:0;font-size:12px;color:#4F46E5;font-weight:700;text-transform:uppercase;letter-spacing:1px">Campaign Details</p>
+                        <p style="margin:8px 0 0;font-size:14px"><strong>Name:</strong> ${campaign.name}</p>
+                        <p style="margin:4px 0 0;font-size:14px"><strong>Channel:</strong> ${campaign.channel}</p>
+                        <p style="margin:4px 0 0;font-size:14px"><strong>Submitted by:</strong> ${actorName}</p>
                     </div>
-                    <div style="padding:40px 32px">
-                        <p style="font-size:16px">Hi there,</p>
-                        <p><strong>${actorName}</strong> has submitted a campaign that requires your review and approval in the <strong style="color:#667eea">"${workspace.title}"</strong> workspace.</p>
-                        <div style="background:#f5f3ff;border-left:4px solid #667eea;padding:16px 20px;border-radius:8px;margin:24px 0">
-                            <p style="margin:0;font-size:12px;color:#6d28d9;font-weight:700;text-transform:uppercase;letter-spacing:1px">Campaign Details</p>
-                            <p style="margin:8px 0 0;font-size:14px"><strong>Name:</strong> ${campaign.name}</p>
-                            <p style="margin:4px 0 0;font-size:14px"><strong>Channel:</strong> ${campaign.channel}</p>
-                            <p style="margin:4px 0 0;font-size:14px"><strong>Submitted by:</strong> ${actorName}</p>
-                        </div>
-                        <p style="font-size:14px;color:#555">Please log in to review the details and approve or reject the broadcast.</p>
-                        <div style="text-align:center;margin-top:32px">
-                            <a href="https://msg.noltfinance.com/campaigns/${campaignId}" style="display:inline-block;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;padding:14px 36px;border-radius:50px;text-decoration:none;font-weight:900;font-size:14px">Review Campaign →</a>
-                        </div>
+                    <p style="font-size:14px;color:#555">Please log in to review the details and approve or reject the broadcast.</p>
+                    <div style="text-align:center;margin-top:32px">
+                        <a href="https://msg.noltfinance.com/campaigns/${campaignId}" style="display:inline-block;background-color:#4F46E5;color:#fff;padding:14px 36px;border-radius:50px;text-decoration:none;font-weight:bold;font-size:14px">Review Campaign &rarr;</a>
                     </div>
                 </div>
             `;
 
-            sendEmail(email, `Approval Required: Campaign "${campaign.name}"`, emailHtml).catch(console.error);
+            sendEmail(
+                email, 
+                `Approval Required: Campaign "${campaign.name}"`, 
+                emailHtml, 
+                `MsgScale Workspace: ${workspace.title}`, 
+                "MsgScale", 
+                undefined, 
+                "MsgScale"
+            ).catch(console.error);
         }
     }
 
