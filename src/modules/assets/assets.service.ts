@@ -1,9 +1,8 @@
-import { eq } from 'drizzle-orm';
-import { assets } from '../../db/schema';
+import { eq, inArray } from 'drizzle-orm';
+import { assets, users, assetActivities } from '../../db/schema';
 import { supabase } from '../../utils/supabase';
 import { CreateAssetInput } from './assets.schema';
 import { sendEmail } from '../shared/zepto';
-import { users } from '../../db/schema';
 
 export class AssetsService {
     constructor(private db: any) { }
@@ -61,8 +60,31 @@ export class AssetsService {
             fileUrl,
         }).returning();
 
-        // Send Email if assigned
+        // Log Asset Creation
+        await this.db.insert(assetActivities).values({
+            type: 'system',
+            title: 'New Hardware Provisioned',
+            desc: `${newAsset.name} was added to the inventory.`,
+            icon: 'inventory_2',
+            color: 'blue',
+            roles: ['SUPER_ADMIN', 'ADMIN_USER', 'AUDITOR'],
+            assetId: newAsset.id
+        });
+
         if (status === 'PENDING' && cleanAssignedTo) {
+            // Log Assignment Need
+            await this.db.insert(assetActivities).values({
+                type: 'system',
+                title: 'Action Required',
+                desc: `Please accept the assignment for ${newAsset.name}.`,
+                icon: 'signature',
+                color: 'amber',
+                roles: ['USER', 'SUPER_ADMIN'],
+                targetUserId: cleanAssignedTo,
+                assetId: newAsset.id,
+                hasCTA: true
+            });
+
             // Fetch assignee email
             const assignee = await this.db.query.users.findFirst({
                 where: eq(users.id, cleanAssignedTo),
@@ -98,6 +120,22 @@ export class AssetsService {
             throw new Error('Asset not found');
         }
 
+        await this.db.insert(assetActivities).values({
+            type: 'system',
+            title: 'Equipment Accepted',
+            desc: `Assignment accepted for ${updatedAsset.name}.`,
+            icon: 'check_circle',
+            color: 'green',
+            roles: ['SUPER_ADMIN', 'USER'],
+            targetUserId: updatedAsset.assignedTo,
+            assetId: assetId
+        });
+
+        // Mark previous "Action Required" for this user & asset as read
+        await this.db.update(assetActivities)
+            .set({ isRead: true })
+            .where(eq(assetActivities.assetId, assetId));
+
         return updatedAsset;
     }
 
@@ -112,6 +150,23 @@ export class AssetsService {
                     .set({ status: 'ACTIVE' })
                     .where(eq(assets.id, id))
                     .returning();
+                    
+                if (updated) {
+                    await this.db.insert(assetActivities).values({
+                        type: 'system',
+                        title: 'Equipment Accepted',
+                        desc: `Assignment accepted for ${updated.name}.`,
+                        icon: 'check_circle',
+                        color: 'green',
+                        roles: ['SUPER_ADMIN', 'USER'],
+                        targetUserId: updated.assignedTo,
+                        assetId: id
+                    });
+                    await this.db.update(assetActivities)
+                        .set({ isRead: true })
+                        .where(eq(assetActivities.assetId, id));
+                }
+                
                 return updated;
             })
         );
@@ -133,6 +188,18 @@ export class AssetsService {
             throw new Error(`Asset with id ${id} not found`);
         }
 
+        await this.db.insert(assetActivities).values({
+            type: 'system',
+            title: 'Action Required',
+            desc: `Please accept the assignment for ${updatedAsset.name}.`,
+            icon: 'signature',
+            color: 'amber',
+            roles: ['USER', 'SUPER_ADMIN'],
+            targetUserId: data.assignedTo,
+            assetId: id,
+            hasCTA: true
+        });
+
         // Logic to dispatch consent email can go here in the future
 
         return updatedAsset;
@@ -150,6 +217,21 @@ export class AssetsService {
                     })
                     .where(eq(assets.id, id))
                     .returning();
+                
+                if (updated) {
+                    await this.db.insert(assetActivities).values({
+                        type: 'system',
+                        title: 'Action Required',
+                        desc: `Please accept the assignment for ${updated.name}.`,
+                        icon: 'signature',
+                        color: 'amber',
+                        roles: ['USER', 'SUPER_ADMIN'],
+                        targetUserId: data.assignedTo,
+                        assetId: id,
+                        hasCTA: true
+                    });
+                }
+                
                 return updated;
             })
         );
@@ -170,6 +252,18 @@ export class AssetsService {
         if (!updatedAsset) {
             throw new Error(`Asset with id ${id} not found`);
         }
+
+        await this.db.insert(assetActivities).values({
+            type: 'system',
+            title: 'Action Required',
+            desc: `Please accept the reassignment for ${updatedAsset.name}.`,
+            icon: 'signature',
+            color: 'amber',
+            roles: ['USER', 'SUPER_ADMIN'],
+            targetUserId: data.assignedTo,
+            assetId: id,
+            hasCTA: true
+        });
 
         // Fetch assignee email
         const assignee = await this.db.query.users.findFirst({
@@ -206,6 +300,16 @@ export class AssetsService {
         if (!updatedAsset) {
             throw new Error(`Asset with id ${id} not found`);
         }
+
+        await this.db.insert(assetActivities).values({
+            type: 'system',
+            title: 'Hardware Decommissioned',
+            desc: `${updatedAsset.name} has been taken out of service.`,
+            icon: 'delete',
+            color: 'red',
+            roles: ['SUPER_ADMIN', 'ADMIN_USER', 'AUDITOR'],
+            assetId: id
+        });
 
         return updatedAsset;
     }
