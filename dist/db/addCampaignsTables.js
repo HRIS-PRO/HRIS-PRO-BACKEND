@@ -88,6 +88,8 @@ const pushCampaignsSchema = async () => {
                 "content" jsonb NOT NULL,
                 "scheduledAt" timestamp,
                 "throttleRate" integer,
+                "cycleConfig" jsonb,
+                "anniversaryConfig" jsonb,
                 "createdAt" timestamp DEFAULT now() NOT NULL,
                 "updatedAt" timestamp DEFAULT now() NOT NULL
             );

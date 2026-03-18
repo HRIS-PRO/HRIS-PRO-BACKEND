@@ -2,7 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.sendEmail = sendEmail;
 const env_1 = require("../../config/env");
-async function sendEmail(to, subject, htmlContent, preheader = '', fromName, fromEmail) {
+async function sendEmail(to, subject, htmlContent, preheader = '', fromName, fromEmail, appName = 'HRIS Pro') {
     // Basic HTML Wrapper for professional look
     // The hidden div explicitly injects the preheader text right at the start of the body for Gmail/email clients
     const wrapper = `
@@ -25,13 +25,13 @@ async function sendEmail(to, subject, htmlContent, preheader = '', fromName, fro
         </div>
         <div class="container">
             <div class="header">
-                <h1>HRIS Pro</h1>
+                <h1>${appName}</h1>
             </div>
             <div class="content">
                 ${htmlContent}
             </div>
             <div class="footer">
-                &copy; ${new Date().getFullYear()} HRIS Pro. All rights reserved.
+                &copy; ${new Date().getFullYear()} ${appName}. All rights reserved.
             </div>
         </div>
     </body>
@@ -63,7 +63,7 @@ async function sendEmail(to, subject, htmlContent, preheader = '', fromName, fro
             body: JSON.stringify({
                 from: {
                     address: fromEmail || env_1.env.ZEPTO_FROM_EMAIL,
-                    name: fromName || "HRIS Pro System"
+                    name: fromName || `${appName} System`
                 },
                 ...payload,
             }),

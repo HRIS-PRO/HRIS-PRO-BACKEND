@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, uuid, pgEnum, integer, jsonb, primaryKey } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, uuid, pgEnum, integer, jsonb, primaryKey, boolean } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 
 // Enums
@@ -18,6 +18,9 @@ export const campaignChannelEnum = pgEnum("campaign_channel", ["EMAIL", "SMS", "
 export const campaignStatusEnum = pgEnum("campaign_status", ["DRAFT", "PENDING", "APPROVED", "REJECTED", "SCHEDULED", "SENDING", "COMPLETED", "FAILED", "CANCELLED"]);
 export const campaignCategoryEnum = pgEnum("campaign_category", ["PROMOTIONAL", "TRANSACTIONAL", "NEWSLETTER"]);
 export const analyticsEventTypeEnum = pgEnum("analytics_event_type", ["SENT", "DELIVERED", "OPENED", "CLICKED", "BOUNCED", "FAILED"]);
+
+export const auditCycleStatusEnum = pgEnum("audit_cycle_status", ["Planned", "In Progress", "Completed"]);
+export const auditResultEnum = pgEnum("audit_result", ["Verified", "Missing", "Damaged", "Unclear"]);
 
 // -----------------------------------------------------------------------------
 // Auth & User Management
@@ -470,3 +473,79 @@ export const campaignAnalyticsRelations = relations(campaignAnalytics, ({ one })
     }),
 }));
 
+// -----------------------------------------------------------------------------
+// Audits & Asset Verification
+// -----------------------------------------------------------------------------
+
+export const auditCycles = pgTable("AUDIT_CYCLE", {
+    id: uuid("id").primaryKey().defaultRandom(),
+    displayId: text("displayId").notNull(), // e.g. "AUD-2024-Q4"
+    name: text("name").notNull(),
+    startDate: text("startDate").notNull(),
+    endDate: text("endDate").notNull(),
+    status: auditCycleStatusEnum("status").default("In Progress").notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
+});
+
+export const auditCycleAuditors = pgTable("AUDIT_CYCLE_AUDITOR", {
+    id: uuid("id").primaryKey().defaultRandom(),
+    cycleId: uuid("cycleId").notNull().references(() => auditCycles.id, { onDelete: 'cascade' }),
+    userId: uuid("userId").notNull().references(() => users.id),
+});
+
+export const auditVerifications = pgTable("AUDIT_VERIFICATION", {
+    id: uuid("id").primaryKey().defaultRandom(),
+    cycleId: uuid("cycleId").notNull().references(() => auditCycles.id, { onDelete: 'cascade' }),
+    assetId: text("assetId").notNull().references(() => assets.id, { onDelete: 'cascade' }),
+    userId: uuid("userId").notNull().references(() => users.id), // The auditor who verified
+    result: auditResultEnum("result").notNull(),
+    notes: text("notes"),
+    verifiedAt: timestamp("verifiedAt").defaultNow().notNull(),
+});
+
+export const auditCyclesRelations = relations(auditCycles, ({ many }) => ({
+    auditors: many(auditCycleAuditors),
+    verifications: many(auditVerifications),
+}));
+
+export const auditCycleAuditorsRelations = relations(auditCycleAuditors, ({ one }) => ({
+    cycle: one(auditCycles, {
+        fields: [auditCycleAuditors.cycleId],
+        references: [auditCycles.id],
+    }),
+    auditor: one(users, {
+        fields: [auditCycleAuditors.userId],
+        references: [users.id],
+    }),
+}));
+
+export const auditVerificationsRelations = relations(auditVerifications, ({ one }) => ({
+    cycle: one(auditCycles, {
+        fields: [auditVerifications.cycleId],
+        references: [auditCycles.id],
+    }),
+    asset: one(assets, {
+        fields: [auditVerifications.assetId],
+        references: [assets.id],
+    }),
+    auditor: one(users, {
+        fields: [auditVerifications.userId],
+        references: [users.id],
+    }),
+}));
+
+export const assetActivities = pgTable("ASSET_ACTIVITY", {
+    id: uuid("id").primaryKey().defaultRandom(),
+    type: text("type").notNull(),
+    title: text("title").notNull(),
+    desc: text("desc").notNull(),
+    icon: text("icon").notNull(),
+    color: text("color").notNull(),
+    roles: jsonb("roles").notNull().$type<string[]>(),
+    targetUserId: uuid("targetUserId").references(() => users.id, { onDelete: 'set null' }),
+    assetId: text("assetId").references(() => assets.id, { onDelete: 'cascade' }),
+    hasCTA: boolean("hasCTA").default(false),
+    isRead: boolean("isRead").default(false),
+    createdAt: timestamp("createdAt").defaultNow().notNull()
+});

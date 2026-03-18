@@ -80,11 +80,22 @@ class CampaignsController {
         const { workspaceId, id } = request.params;
         try {
             this.checkRole(request, ['Admin', 'Manager', 'Editor']);
-            const campaign = await this.campaignsService.submitCampaign(id, workspaceId);
+            const campaign = await this.campaignsService.submitCampaign(id, workspaceId, request.user?.id);
             if (!campaign) {
                 return reply.code(400).send({ message: 'Campaign must be in DRAFT status to submit' });
             }
             return reply.send(campaign);
+        }
+        catch (error) {
+            return reply.code(error.message.includes('Unauthorized') ? 403 : 400).send({ message: error.message });
+        }
+    }
+    async resendApprovalNotification(request, reply) {
+        const { workspaceId, id } = request.params;
+        try {
+            this.checkRole(request, ['Admin', 'Manager', 'Editor']);
+            const campaign = await this.campaignsService.resendApprovalNotification(id, workspaceId, request.user?.id);
+            return reply.send({ success: true, message: 'Approval notification resent successfully' });
         }
         catch (error) {
             return reply.code(error.message.includes('Unauthorized') ? 403 : 400).send({ message: error.message });

@@ -31,6 +31,7 @@ async function workspacesRoutes(app) {
     app.get('/:id/eligible-users', workspacesController.getEligibleUsers.bind(workspacesController));
     app.post('/:id/members/bulk', workspacesController.bulkAddMembers.bind(workspacesController));
     app.post('/customers/bulk', workspacesController.bulkAddCustomers.bind(workspacesController));
+    app.patch('/customers/:id', workspacesController.updateBulkCustomer.bind(workspacesController));
     app.get('/customers', workspacesController.getBulkCustomers.bind(workspacesController));
     app.delete('/customers/bulk', workspacesController.deleteBulkCustomers.bind(workspacesController));
     // --- CONTACT GROUPS ---

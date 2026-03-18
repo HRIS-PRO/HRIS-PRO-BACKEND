@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.acceptAssetSchema = exports.createAssetSchema = void 0;
+exports.decommissionAssetSchema = exports.reassignAssetSchema = exports.acceptAssetSchema = exports.createAssetSchema = void 0;
 const zod_1 = require("zod");
 exports.createAssetSchema = zod_1.z.object({
     name: zod_1.z.string().min(1),
@@ -17,4 +17,13 @@ exports.createAssetSchema = zod_1.z.object({
 });
 exports.acceptAssetSchema = zod_1.z.object({
     id: zod_1.z.string().min(1),
+});
+exports.reassignAssetSchema = zod_1.z.object({
+    assetId: zod_1.z.string().min(1),
+    assignedTo: zod_1.z.string().min(1),
+    department: zod_1.z.string().min(1),
+    manager: zod_1.z.string().min(1),
+});
+exports.decommissionAssetSchema = zod_1.z.object({
+    assetId: zod_1.z.string().min(1)
 });

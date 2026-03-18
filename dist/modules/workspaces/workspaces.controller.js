@@ -140,10 +140,24 @@ class WorkspacesController {
             return reply.code(400).send({ message: error.message || 'Failed to bulk add customers' });
         }
     }
+    async updateBulkCustomer(request, reply) {
+        const { id } = request.params;
+        const data = request.body;
+        try {
+            const result = await this.workspacesService.updateBulkCustomer(id, data);
+            return reply.send(result);
+        }
+        catch (error) {
+            return reply.code(400).send({ message: error.message || 'Failed to update customer' });
+        }
+    }
     async getBulkCustomers(request, reply) {
         try {
-            const customers = await this.workspacesService.getBulkCustomers();
-            return reply.send(customers);
+            const page = parseInt(request.query.page || '1', 10);
+            const limit = parseInt(request.query.limit || '20', 10);
+            const search = request.query.search || '';
+            const result = await this.workspacesService.getBulkCustomers(page, limit, search);
+            return reply.send(result);
         }
         catch (error) {
             return reply.code(500).send({ message: error.message || 'Failed to fetch customers' });

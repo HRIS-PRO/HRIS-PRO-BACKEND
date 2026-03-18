@@ -25,6 +25,8 @@ const equipment_requests_routes_1 = require("./modules/equipment-requests/equipm
 const workspaces_routes_1 = __importDefault(require("./modules/workspaces/workspaces.routes"));
 const templates_routes_1 = __importDefault(require("./modules/templates/templates.routes"));
 const campaigns_routes_1 = require("./modules/campaigns/campaigns.routes");
+const audits_routes_1 = __importDefault(require("./modules/audits/audits.routes"));
+const activities_routes_1 = __importDefault(require("./modules/activities/activities.routes"));
 const ws_routes_1 = require("./websocket/ws.routes");
 const buildApp = async () => {
     const app = (0, fastify_1.default)({
@@ -79,6 +81,8 @@ const buildApp = async () => {
     await app.register(workspaces_routes_1.default, { prefix: '/workspaces' });
     await app.register(templates_routes_1.default, { prefix: '/templates' });
     await app.register(campaigns_routes_1.campaignsRoutes, { prefix: '/campaigns' });
+    await app.register(audits_routes_1.default, { prefix: '/audits' });
+    await app.register(activities_routes_1.default, { prefix: '/activities' });
     return app;
 };
 exports.default = buildApp;

@@ -50,9 +50,25 @@ class AuthService {
         })
             .where((0, drizzle_orm_1.eq)(schema_1.users.id, user.id));
         // Send Email
-        await (0, zepto_1.sendEmail)(email, 'Your HRIS Login OTP', `<p style="text-align: center;">Your login verification code is:</p>
-             <div class="otp-code">${otp}</div>
-             <p style="text-align: center;">This code expires in 10 minutes. If you did not request this, please ignore this email.</p>`);
+        await (0, zepto_1.sendEmail)(email, 'Your Login Verification Code', `
+            <div style="font-family: 'Inter', Arial, sans-serif; max-width: 450px; margin: 0 auto; color: #333; line-height: 1.6; border: 1px solid #eee; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.05);">
+                <div style="background-color: #0f172a; padding: 25px; text-align: center; color: white;">
+                    <h2 style="margin: 0; font-size: 18px; font-weight: 700;">Security Verification</h2>
+                </div>
+                <div style="padding: 35px 30px; text-align: center;">
+                    <p style="color: #64748b; font-size: 14px; margin-top: 0;">Use the code below to complete your login. It will expire in 10 minutes.</p>
+                    
+                    <div style="background-color: #f8fafc; border: 2px dashed #e2e8f0; padding: 20px; border-radius: 12px; margin: 25px 0;">
+                        <span style="font-size: 32px; font-weight: 900; letter-spacing: 8px; color: #0f172a; font-family: monospace;">${otp}</span>
+                    </div>
+
+                    <p style="font-size: 12px; color: #94a3b8; margin-bottom: 0;">If you did not request this code, please ignore this email or contact support.</p>
+                </div>
+                <div style="background-color: #f8fafc; padding: 15px; text-align: center; font-size: 10px; color: #cbd5e1; border-top: 1px solid #f1f5f9;">
+                    &copy; ${new Date().getFullYear()} Nolt Finance. Secure Authentication.
+                </div>
+            </div>
+            `);
     }
     async verifyLoginOtp(email, otp) {
         // Find user with roles

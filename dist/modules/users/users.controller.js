@@ -16,5 +16,15 @@ class UsersController {
             return reply.status(500).send({ message: error.message || 'Failed to fetch super admins' });
         }
     }
+    async getAssetTrackerUsers(request, reply) {
+        try {
+            const users = await this.usersService.getAssetTrackerUsers();
+            return reply.send(users);
+        }
+        catch (error) {
+            request.log.error(error);
+            return reply.status(500).send({ message: error.message || 'Failed to fetch asset tracker users' });
+        }
+    }
 }
 exports.UsersController = UsersController;

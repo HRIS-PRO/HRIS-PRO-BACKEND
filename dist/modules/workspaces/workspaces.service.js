@@ -43,18 +43,27 @@ class WorkspacesService {
                 ownerId: userId,
             }).returning();
             // 2. Add the owner as the first member
-            await tx.insert(schema_1.workspaceMembers).values({
-                workspaceId: newWorkspace.id,
-                userId: userId,
-            });
+            const memberSet = new Set();
+            memberSet.add(userId);
             // 3. Add additional members if provided
             if (data.members && data.members.length > 0) {
-                const memberInserts = data.members.map(memberId => ({
-                    workspaceId: newWorkspace.id,
-                    userId: memberId,
-                }));
-                await tx.insert(schema_1.workspaceMembers).values(memberInserts);
+                for (const m of data.members) {
+                    memberSet.add(m);
+                }
             }
+            // 4. Automatically add all MSGSCALE_BULK Admins
+            const adminUsers = await tx.select({ userId: schema_1.userRoles.userId })
+                .from(schema_1.userRoles)
+                .where((0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(schema_1.userRoles.app, 'MSGSCALE_BULK'), (0, drizzle_orm_1.eq)(schema_1.userRoles.role, 'Admin')));
+            for (const admin of adminUsers) {
+                memberSet.add(admin.userId);
+            }
+            // 5. Insert all gathered members
+            const memberInserts = Array.from(memberSet).map(memberId => ({
+                workspaceId: newWorkspace.id,
+                userId: memberId,
+            }));
+            await tx.insert(schema_1.workspaceMembers).values(memberInserts);
             return newWorkspace;
         });
     }
@@ -318,11 +327,47 @@ class WorkspacesService {
         }
         return { added: validCustomers.length, skipped };
     }
-    async getBulkCustomers() {
+    async updateBulkCustomer(id, data) {
+        // Prevent accidental updates to these sensitive or system fields
+        const { bvn, nin, id: _id, createdAt, updatedAt, externalCreatedAt, ...safeData } = data;
+        const [updated] = await this.db.update(schema_1.bulkCustomers)
+            .set({
+            ...safeData,
+            updatedAt: new Date()
+        })
+            .where((0, drizzle_orm_1.eq)(schema_1.bulkCustomers.id, id))
+            .returning();
+        return updated;
+    }
+    async getBulkCustomers(page = 1, limit = 20, search = '') {
+        const searchPattern = search ? `%${search}%` : null;
+        const baseQueryConditions = searchPattern
+            ? (0, drizzle_orm_1.or)((0, drizzle_orm_1.ilike)(schema_1.bulkCustomers.firstName, searchPattern), (0, drizzle_orm_1.ilike)(schema_1.bulkCustomers.surname, searchPattern), (0, drizzle_orm_1.ilike)(schema_1.bulkCustomers.email, searchPattern), (0, drizzle_orm_1.ilike)(schema_1.bulkCustomers.mobilePhone, searchPattern), (0, drizzle_orm_1.ilike)(schema_1.bulkCustomers.otherName, searchPattern), (0, drizzle_orm_1.ilike)(schema_1.bulkCustomers.customerType, searchPattern), (0, drizzle_orm_1.ilike)(schema_1.bulkCustomers.occupation, searchPattern))
+            : undefined;
+        const [totalCountResult] = await this.db.select({ count: (0, drizzle_orm_1.sql) `count(*)`.mapWith(Number) })
+            .from(schema_1.bulkCustomers)
+            .where(baseQueryConditions);
+        const total = totalCountResult?.count || 0;
+        let offset = (page - 1) * limit;
+        if (offset >= total && total > 0) {
+            page = 1;
+            offset = 0;
+        }
         const customers = await this.db.query.bulkCustomers.findMany({
+            where: baseQueryConditions,
             orderBy: (bulkCustomers, { desc }) => [desc(bulkCustomers.createdAt)],
+            limit,
+            offset,
         });
-        return customers;
+        return {
+            data: customers,
+            meta: {
+                total,
+                page,
+                limit,
+                totalPages: Math.ceil(total / limit)
+            }
+        };
     }
     async deleteBulkCustomers(customerIds) {
         if (!customerIds || customerIds.length === 0)

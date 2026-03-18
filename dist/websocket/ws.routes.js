@@ -14,8 +14,9 @@ async function wsRoutes(app) {
      * The client passes the JWT as a query-param because browser
      * WebSocket API does not support custom headers.
      */
-    app.get('/ws', { websocket: true }, async (socket, request) => {
+    app.get('/ws', { websocket: true }, async (connection, request) => {
         let userId = null;
+        const socket = connection.socket;
         try {
             const token = request.query.token;
             if (!token)

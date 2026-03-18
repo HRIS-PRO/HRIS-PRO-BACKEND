@@ -5,6 +5,7 @@ const drizzle_orm_1 = require("drizzle-orm");
 const schema_1 = require("../../db/schema");
 const campaigns_engine_1 = require("./campaigns.engine");
 const zepto_bulk_service_1 = require("./zepto-bulk.service");
+const zepto_1 = require("../shared/zepto");
 class CampaignsService {
     db;
     constructor(db) {
@@ -147,12 +148,72 @@ class CampaignsService {
             return updatedCampaign;
         });
     }
-    async submitCampaign(id, workspaceId) {
+    async submitCampaign(id, workspaceId, actorId) {
         const [updated] = await this.db.update(schema_1.campaigns)
             .set({ status: 'PENDING' })
             .where((0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(schema_1.campaigns.id, id), (0, drizzle_orm_1.eq)(schema_1.campaigns.workspaceId, workspaceId), (0, drizzle_orm_1.eq)(schema_1.campaigns.status, 'DRAFT')))
             .returning();
+        if (updated) {
+            this.notifyApprovers(workspaceId, id, actorId).catch(err => {
+                console.error(`Failed to notify approvers for campaign ${id}:`, err);
+            });
+        }
         return updated;
+    }
+    async resendApprovalNotification(id, workspaceId, actorId) {
+        const existing = await this.db.query.campaigns.findFirst({
+            where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(schema_1.campaigns.id, id), (0, drizzle_orm_1.eq)(schema_1.campaigns.workspaceId, workspaceId), (0, drizzle_orm_1.eq)(schema_1.campaigns.status, 'PENDING'))
+        });
+        if (!existing) {
+            throw new Error("Campaign not found or not in PENDING state.");
+        }
+        await this.notifyApprovers(workspaceId, id, actorId);
+        return existing;
+    }
+    async notifyApprovers(workspaceId, campaignId, actorId) {
+        const workspace = await this.db.query.workspaces.findFirst({
+            where: (0, drizzle_orm_1.eq)(schema_1.workspaces.id, workspaceId),
+        });
+        const campaign = await this.db.query.campaigns.findFirst({
+            where: (0, drizzle_orm_1.eq)(schema_1.campaigns.id, campaignId),
+        });
+        if (!workspace || !campaign)
+            return;
+        const actor = await this.db.query.users.findFirst({
+            where: (0, drizzle_orm_1.eq)(schema_1.users.id, actorId),
+            with: { employee: true },
+        });
+        const actorName = actor?.employee
+            ? `${actor.employee.firstName} ${actor.employee.surname}`
+            : actor?.email || 'A user';
+        // Find all Admins or Managers in the workspace for MSGSCALE_BULK
+        const members = await this.db.select({ userRole: schema_1.userRoles.role, email: schema_1.users.email, firstName: (0, drizzle_orm_1.sql) `${schema_1.users.id}` /* Dummy for now, we'll fetch full user if needed */ })
+            .from(schema_1.workspaceMembers)
+            .innerJoin(schema_1.users, (0, drizzle_orm_1.eq)(schema_1.workspaceMembers.userId, schema_1.users.id))
+            .innerJoin(schema_1.userRoles, (0, drizzle_orm_1.eq)(schema_1.users.id, schema_1.userRoles.userId))
+            .where((0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(schema_1.workspaceMembers.workspaceId, workspaceId), (0, drizzle_orm_1.eq)(schema_1.userRoles.app, 'MSGSCALE_BULK')));
+        const eligibleApprovers = members.filter(m => m.userRole === 'Admin' || m.userRole === 'Manager');
+        // Deduplicate by email
+        const uniqueEmails = Array.from(new Set(eligibleApprovers.map(m => m.email.toLowerCase())));
+        for (const email of uniqueEmails) {
+            const emailHtml = `
+                <div style="padding: 10px 0;">
+                    <p style="font-size:16px;">Hi there,</p>
+                    <p><strong>${actorName}</strong> has submitted a campaign that requires your review and approval in the <strong style="color:#4F46E5">"${workspace.title}"</strong> workspace.</p>
+                    <div style="background:#f5f3ff;border-left:4px solid #4F46E5;padding:16px 20px;border-radius:8px;margin:24px 0">
+                        <p style="margin:0;font-size:12px;color:#4F46E5;font-weight:700;text-transform:uppercase;letter-spacing:1px">Campaign Details</p>
+                        <p style="margin:8px 0 0;font-size:14px"><strong>Name:</strong> ${campaign.name}</p>
+                        <p style="margin:4px 0 0;font-size:14px"><strong>Channel:</strong> ${campaign.channel}</p>
+                        <p style="margin:4px 0 0;font-size:14px"><strong>Submitted by:</strong> ${actorName}</p>
+                    </div>
+                    <p style="font-size:14px;color:#555">Please log in to review the details and approve or reject the broadcast.</p>
+                    <div style="text-align:center;margin-top:32px">
+                        <a href="https://msg.noltfinance.com/campaigns/${campaignId}" style="display:inline-block;background-color:#4F46E5;color:#fff;padding:14px 36px;border-radius:50px;text-decoration:none;font-weight:bold;font-size:14px">Review Campaign &rarr;</a>
+                    </div>
+                </div>
+            `;
+            (0, zepto_1.sendEmail)(email, `Approval Required: Campaign "${campaign.name}"`, emailHtml, `MsgScale Workspace: ${workspace.title}`, "MsgScale", undefined, "MsgScale").catch(console.error);
+        }
     }
     async approveCampaign(id, workspaceId, approverId, action) {
         const status = action === 'APPROVE' ? 'APPROVED' : 'REJECTED';

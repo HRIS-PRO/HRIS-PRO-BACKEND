@@ -29,6 +29,8 @@ async function campaignsRoutes(app) {
     }, (request, reply) => campaignsController.updateCampaign(request, reply));
     // Submit for approval
     app.post('/:workspaceId/:id/submit', (request, reply) => campaignsController.submitCampaign(request, reply));
+    // Resend approval notification
+    app.post('/:workspaceId/:id/resend-approval', (request, reply) => campaignsController.resendApprovalNotification(request, reply));
     // Approve or Reject
     app.post('/:workspaceId/:id/review', {
         schema: {

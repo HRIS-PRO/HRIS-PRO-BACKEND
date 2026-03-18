@@ -6,11 +6,12 @@ export async function assetsRoutes(app: FastifyInstance) {
     const assetsService = new AssetsService(app.db);
     const assetsController = new AssetsController(assetsService);
 
+    app.addHook('onRequest', app.authenticate);
+
     app.get('/', assetsController.getAllAssets.bind(assetsController));
 
     app.post(
         '/',
-        // Schema validation is tricky with multipart, handled manually or in service for now
         assetsController.createAsset.bind(assetsController)
     );
     app.put(
@@ -35,13 +36,11 @@ export async function assetsRoutes(app: FastifyInstance) {
 
     app.put(
         '/:id/reassign',
-        { preHandler: [app.authenticate] },
         assetsController.reassignAsset.bind(assetsController)
     );
 
     app.put(
         '/:id/decommission',
-        { preHandler: [app.authenticate] },
         assetsController.decommissionAsset.bind(assetsController)
     );
 }

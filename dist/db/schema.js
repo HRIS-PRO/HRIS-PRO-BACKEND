@@ -1,7 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.campaignRecipients = exports.campaigns = exports.templatesRelations = exports.templates = exports.groupRulesRelations = exports.groupMembersRelations = exports.groupsRelations = exports.groupRules = exports.groupMembers = exports.groups = exports.ruleOperatorEnum = exports.groupTypeEnum = exports.bulkCustomersRelations = exports.bulkCustomers = exports.workspaceMembersRelations = exports.workspacesRelations = exports.workspaceMembers = exports.workspaces = exports.equipmentRequestsRelations = exports.equipmentRequests = exports.assetReportsRelations = exports.assetReports = exports.assetLocations = exports.assetCategories = exports.assetsRelations = exports.assets = exports.employeesRelations = exports.employees = exports.locations = exports.departmentsRelations = exports.departments = exports.userRolesRelations = exports.usersRelations = exports.userRoles = exports.users = exports.analyticsEventTypeEnum = exports.campaignCategoryEnum = exports.campaignStatusEnum = exports.campaignChannelEnum = exports.templateStatusEnum = exports.templateTypeEnum = exports.workspaceStatusEnum = exports.requestStatusEnum = exports.requestPriorityEnum = exports.reportStatusEnum = exports.assetStatusEnum = exports.locationStatusEnum = exports.departmentStatusEnum = exports.employeeStatusEnum = exports.appTypeEnum = void 0;
-exports.campaignAnalyticsRelations = exports.campaignRecipientsRelations = exports.campaignsRelations = exports.campaignAnalytics = void 0;
+exports.templatesRelations = exports.templates = exports.groupRulesRelations = exports.groupMembersRelations = exports.groupsRelations = exports.groupRules = exports.groupMembers = exports.groups = exports.ruleOperatorEnum = exports.groupTypeEnum = exports.bulkCustomersRelations = exports.bulkCustomers = exports.workspaceMembersRelations = exports.workspacesRelations = exports.workspaceMembers = exports.workspaces = exports.equipmentRequestsRelations = exports.equipmentRequests = exports.assetReportsRelations = exports.assetReports = exports.assetLocations = exports.assetCategories = exports.assetsRelations = exports.assets = exports.employeesRelations = exports.employees = exports.locations = exports.departmentsRelations = exports.departments = exports.userRolesRelations = exports.usersRelations = exports.userRoles = exports.users = exports.auditResultEnum = exports.auditCycleStatusEnum = exports.analyticsEventTypeEnum = exports.campaignCategoryEnum = exports.campaignStatusEnum = exports.campaignChannelEnum = exports.templateStatusEnum = exports.templateTypeEnum = exports.workspaceStatusEnum = exports.requestStatusEnum = exports.requestPriorityEnum = exports.reportStatusEnum = exports.assetStatusEnum = exports.locationStatusEnum = exports.departmentStatusEnum = exports.employeeStatusEnum = exports.appTypeEnum = void 0;
+exports.assetActivities = exports.auditVerificationsRelations = exports.auditCycleAuditorsRelations = exports.auditCyclesRelations = exports.auditVerifications = exports.auditCycleAuditors = exports.auditCycles = exports.campaignAnalyticsRelations = exports.campaignRecipientsRelations = exports.campaignsRelations = exports.campaignAnalytics = exports.campaignRecipients = exports.campaigns = void 0;
 const pg_core_1 = require("drizzle-orm/pg-core");
 const drizzle_orm_1 = require("drizzle-orm");
 // Enums
@@ -20,6 +20,8 @@ exports.campaignChannelEnum = (0, pg_core_1.pgEnum)("campaign_channel", ["EMAIL"
 exports.campaignStatusEnum = (0, pg_core_1.pgEnum)("campaign_status", ["DRAFT", "PENDING", "APPROVED", "REJECTED", "SCHEDULED", "SENDING", "COMPLETED", "FAILED", "CANCELLED"]);
 exports.campaignCategoryEnum = (0, pg_core_1.pgEnum)("campaign_category", ["PROMOTIONAL", "TRANSACTIONAL", "NEWSLETTER"]);
 exports.analyticsEventTypeEnum = (0, pg_core_1.pgEnum)("analytics_event_type", ["SENT", "DELIVERED", "OPENED", "CLICKED", "BOUNCED", "FAILED"]);
+exports.auditCycleStatusEnum = (0, pg_core_1.pgEnum)("audit_cycle_status", ["Planned", "In Progress", "Completed"]);
+exports.auditResultEnum = (0, pg_core_1.pgEnum)("audit_result", ["Verified", "Missing", "Damaged", "Unclear"]);
 // -----------------------------------------------------------------------------
 // Auth & User Management
 // -----------------------------------------------------------------------------
@@ -365,6 +367,8 @@ exports.campaigns = (0, pg_core_1.pgTable)("CAMPAIGN", {
     content: (0, pg_core_1.jsonb)("content").notNull(), // { subject?, preheader?, body, metadata? }
     scheduledAt: (0, pg_core_1.timestamp)("scheduledAt"),
     throttleRate: (0, pg_core_1.integer)("throttleRate"), // msg/hr
+    cycleConfig: (0, pg_core_1.jsonb)("cycleConfig"),
+    anniversaryConfig: (0, pg_core_1.jsonb)("anniversaryConfig"),
     createdAt: (0, pg_core_1.timestamp)("createdAt").defaultNow().notNull(),
     updatedAt: (0, pg_core_1.timestamp)("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
 });
@@ -421,3 +425,72 @@ exports.campaignAnalyticsRelations = (0, drizzle_orm_1.relations)(exports.campai
         references: [exports.bulkCustomers.id],
     }),
 }));
+// -----------------------------------------------------------------------------
+// Audits & Asset Verification
+// -----------------------------------------------------------------------------
+exports.auditCycles = (0, pg_core_1.pgTable)("AUDIT_CYCLE", {
+    id: (0, pg_core_1.uuid)("id").primaryKey().defaultRandom(),
+    displayId: (0, pg_core_1.text)("displayId").notNull(), // e.g. "AUD-2024-Q4"
+    name: (0, pg_core_1.text)("name").notNull(),
+    startDate: (0, pg_core_1.text)("startDate").notNull(),
+    endDate: (0, pg_core_1.text)("endDate").notNull(),
+    status: (0, exports.auditCycleStatusEnum)("status").default("In Progress").notNull(),
+    createdAt: (0, pg_core_1.timestamp)("createdAt").defaultNow().notNull(),
+    updatedAt: (0, pg_core_1.timestamp)("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
+});
+exports.auditCycleAuditors = (0, pg_core_1.pgTable)("AUDIT_CYCLE_AUDITOR", {
+    id: (0, pg_core_1.uuid)("id").primaryKey().defaultRandom(),
+    cycleId: (0, pg_core_1.uuid)("cycleId").notNull().references(() => exports.auditCycles.id, { onDelete: 'cascade' }),
+    userId: (0, pg_core_1.uuid)("userId").notNull().references(() => exports.users.id),
+});
+exports.auditVerifications = (0, pg_core_1.pgTable)("AUDIT_VERIFICATION", {
+    id: (0, pg_core_1.uuid)("id").primaryKey().defaultRandom(),
+    cycleId: (0, pg_core_1.uuid)("cycleId").notNull().references(() => exports.auditCycles.id, { onDelete: 'cascade' }),
+    assetId: (0, pg_core_1.text)("assetId").notNull().references(() => exports.assets.id, { onDelete: 'cascade' }),
+    userId: (0, pg_core_1.uuid)("userId").notNull().references(() => exports.users.id), // The auditor who verified
+    result: (0, exports.auditResultEnum)("result").notNull(),
+    notes: (0, pg_core_1.text)("notes"),
+    verifiedAt: (0, pg_core_1.timestamp)("verifiedAt").defaultNow().notNull(),
+});
+exports.auditCyclesRelations = (0, drizzle_orm_1.relations)(exports.auditCycles, ({ many }) => ({
+    auditors: many(exports.auditCycleAuditors),
+    verifications: many(exports.auditVerifications),
+}));
+exports.auditCycleAuditorsRelations = (0, drizzle_orm_1.relations)(exports.auditCycleAuditors, ({ one }) => ({
+    cycle: one(exports.auditCycles, {
+        fields: [exports.auditCycleAuditors.cycleId],
+        references: [exports.auditCycles.id],
+    }),
+    auditor: one(exports.users, {
+        fields: [exports.auditCycleAuditors.userId],
+        references: [exports.users.id],
+    }),
+}));
+exports.auditVerificationsRelations = (0, drizzle_orm_1.relations)(exports.auditVerifications, ({ one }) => ({
+    cycle: one(exports.auditCycles, {
+        fields: [exports.auditVerifications.cycleId],
+        references: [exports.auditCycles.id],
+    }),
+    asset: one(exports.assets, {
+        fields: [exports.auditVerifications.assetId],
+        references: [exports.assets.id],
+    }),
+    auditor: one(exports.users, {
+        fields: [exports.auditVerifications.userId],
+        references: [exports.users.id],
+    }),
+}));
+exports.assetActivities = (0, pg_core_1.pgTable)("ASSET_ACTIVITY", {
+    id: (0, pg_core_1.uuid)("id").primaryKey().defaultRandom(),
+    type: (0, pg_core_1.text)("type").notNull(),
+    title: (0, pg_core_1.text)("title").notNull(),
+    desc: (0, pg_core_1.text)("desc").notNull(),
+    icon: (0, pg_core_1.text)("icon").notNull(),
+    color: (0, pg_core_1.text)("color").notNull(),
+    roles: (0, pg_core_1.jsonb)("roles").notNull().$type(),
+    targetUserId: (0, pg_core_1.uuid)("targetUserId").references(() => exports.users.id, { onDelete: 'set null' }),
+    assetId: (0, pg_core_1.text)("assetId").references(() => exports.assets.id, { onDelete: 'cascade' }),
+    hasCTA: (0, pg_core_1.boolean)("hasCTA").default(false),
+    isRead: (0, pg_core_1.boolean)("isRead").default(false),
+    createdAt: (0, pg_core_1.timestamp)("createdAt").defaultNow().notNull()
+});

@@ -21,6 +21,8 @@ import { equipmentRequestsRoutes } from './modules/equipment-requests/equipment-
 import workspacesRoutes from './modules/workspaces/workspaces.routes';
 import templatesRoutes from './modules/templates/templates.routes';
 import { campaignsRoutes } from './modules/campaigns/campaigns.routes';
+import auditsRoutes from './modules/audits/audits.routes';
+import activitiesRoutes from './modules/activities/activities.routes';
 import { wsRoutes } from './websocket/ws.routes';
 
 declare module 'fastify' {
@@ -88,6 +90,8 @@ const buildApp = async (): Promise<FastifyInstance> => {
     await app.register(workspacesRoutes, { prefix: '/workspaces' });
     await app.register(templatesRoutes, { prefix: '/templates' });
     await app.register(campaignsRoutes, { prefix: '/campaigns' });
+    await app.register(auditsRoutes, { prefix: '/audits' });
+    await app.register(activitiesRoutes, { prefix: '/activities' });
 
     return app;
 };
