@@ -388,12 +388,16 @@ export class WorkspacesService {
     }
 
     async getBulkCustomers(page: number = 1, limit: number = 20, search: string = '') {
-        const searchPattern = search ? `%${search}%` : null;
+        const cleanSearch = search ? search.trim().replace(/\s+/g, ' ') : '';
+        const searchPattern = cleanSearch ? `%${cleanSearch}%` : null;
         
         const baseQueryConditions = searchPattern 
             ? or(
                 ilike(bulkCustomers.firstName, searchPattern),
                 ilike(bulkCustomers.surname, searchPattern),
+                ilike(bulkCustomers.fullName, searchPattern),
+                sql`CONCAT(${bulkCustomers.firstName}, ' ', ${bulkCustomers.surname}) ILIKE ${searchPattern}`,
+                sql`CONCAT(${bulkCustomers.surname}, ' ', ${bulkCustomers.firstName}) ILIKE ${searchPattern}`,
                 ilike(bulkCustomers.email, searchPattern),
                 ilike(bulkCustomers.mobilePhone, searchPattern),
                 ilike(bulkCustomers.otherName, searchPattern),
@@ -448,7 +452,7 @@ export class WorkspacesService {
         name: string;
         type: 'static' | 'dynamic';
         customerIds?: string[];
-        rules?: { field: string; operator: 'equals' | 'contains' | 'starts_with' | 'not_equals'; value: string }[];
+        rules?: { field: string; operator: 'equals' | 'contains' | 'starts_with' | 'not_equals'; value: string; logicGate?: 'AND' | 'OR' }[];
     }) {
         return await this.db.transaction(async (tx) => {
             // 1. Create the base group
@@ -479,6 +483,7 @@ export class WorkspacesService {
                     field: rule.field,
                     operator: rule.operator,
                     value: rule.value,
+                    logicGate: rule.logicGate || 'AND',
                 }));
                 await tx.insert(groupRules).values(ruleInserts);
             }
@@ -511,25 +516,38 @@ export class WorkspacesService {
                 estimatedCount = Number(result[0]?.count || 0);
             } else if (g.type === 'dynamic' && (g as any).rules && (g as any).rules.length > 0) {
                 // Dynamic rule live evaluation estimation
-                // For MVP, we build dynamic AND conditions.
                 const rulesArr: any[] = (g as any).rules;
-                const conditions = rulesArr.map((r: any) => {
+                let querySql = sql`1=1`;
+                
+                for (let i = 0; i < rulesArr.length; i++) {
+                    const r = rulesArr[i];
                     const column = (bulkCustomers as any)[r.field];
-                    if (!column) return sql`1=1`; // Defensive fallback if field not found
-
-                    switch (r.operator) {
-                        case 'equals': return eq(column, r.value);
-                        case 'not_equals': return sql`${column} != ${r.value}`;
-                        case 'contains': return sql`${column} ILIKE ${'%' + r.value + '%'}`;
-                        case 'starts_with': return sql`${column} ILIKE ${r.value + '%'}`;
-                        default: return sql`1=1`;
+                    let condition = sql`1=1`;
+                    
+                    if (column) {
+                        switch (r.operator) {
+                            case 'equals': condition = sql`${column} = ${r.value}`; break;
+                            case 'not_equals': condition = sql`${column} != ${r.value}`; break;
+                            case 'contains': condition = sql`${column} ILIKE ${'%' + r.value + '%'}`; break;
+                            case 'starts_with': condition = sql`${column} ILIKE ${r.value + '%'}`; break;
+                        }
                     }
-                });
+
+                    if (i === 0) {
+                        querySql = condition;
+                    } else {
+                        if (r.logicGate === 'OR') {
+                            querySql = sql`${querySql} OR ${condition}`;
+                        } else {
+                            querySql = sql`${querySql} AND ${condition}`;
+                        }
+                    }
+                }
 
                 const countResult = await this.db
                     .select({ count: sql<number>`count(*)` })
                     .from(bulkCustomers)
-                    .where(and(...conditions));
+                    .where(sql`(${querySql})`);
 
                 estimatedCount = Number(countResult[0]?.count || 0);
             }

@@ -54,21 +54,37 @@ export class CampaignsService {
                         .where(eq(groupMembers.groupId, g.id));
                     count = Number(res[0]?.count || 0);
                 } else if (g.type === 'dynamic' && (g as any).rules?.length > 0) {
-                    const conditions = (g as any).rules.map((rule: any) => {
-                        const column = (bulkCustomers as any)[rule.field];
-                        if (!column) return sql`1=1`;
-                        switch (rule.operator) {
-                            case 'equals': return eq(column, rule.value);
-                            case 'not_equals': return sql`${column} != ${rule.value}`;
-                            case 'contains': return sql`${column} ILIKE ${'%' + rule.value + '%'}`;
-                            case 'starts_with': return sql`${column} ILIKE ${rule.value + '%'}`;
-                            default: return sql`1=1`;
+                    const rulesArr: any[] = (g as any).rules;
+                    let querySql = sql`1=1`;
+                    
+                    for (let i = 0; i < rulesArr.length; i++) {
+                        const r = rulesArr[i];
+                        const column = (bulkCustomers as any)[r.field];
+                        let condition = sql`1=1`;
+                        
+                        if (column) {
+                            switch (r.operator) {
+                                case 'equals': condition = sql`${column} = ${r.value}`; break;
+                                case 'not_equals': condition = sql`${column} != ${r.value}`; break;
+                                case 'contains': condition = sql`${column} ILIKE ${'%' + r.value + '%'}`; break;
+                                case 'starts_with': condition = sql`${column} ILIKE ${r.value + '%'}`; break;
+                            }
                         }
-                    });
+
+                        if (i === 0) {
+                            querySql = condition;
+                        } else {
+                            if (r.logicGate === 'OR') {
+                                querySql = sql`${querySql} OR ${condition}`;
+                            } else {
+                                querySql = sql`${querySql} AND ${condition}`;
+                            }
+                        }
+                    }
                     const res = await this.db
                         .select({ count: sql<number>`count(*)` })
                         .from(bulkCustomers)
-                        .where(and(...conditions));
+                        .where(sql`(${querySql})`);
                     count = Number(res[0]?.count || 0);
                 }
                 totalReach += count;
@@ -172,20 +188,38 @@ export class CampaignsService {
         });
     }
 
-    async submitCampaign(id: string, workspaceId: string, actorId: string) {
+    async submitCampaign(id: string, workspaceId: string, actorId: string, actorRole: string) {
+        const existing = await this.db.query.campaigns.findFirst({
+            where: and(eq(campaigns.id, id), eq(campaigns.workspaceId, workspaceId), eq(campaigns.status, 'DRAFT'))
+        });
+        if (!existing) return null;
+
+        // Skip flow for Admin or Manager
+        if (actorRole === 'Admin' || actorRole === 'Manager') {
+            const [updated] = await this.db.update(campaigns)
+                .set({ status: existing.scheduledAt && new Date(existing.scheduledAt) > new Date() ? 'SCHEDULED' : 'APPROVED' })
+                .where(eq(campaigns.id, id))
+                .returning();
+            
+            if (updated.status === 'APPROVED') {
+                const engine = new CampaignsEngine(this.db as any);
+                engine.executeCampaign(updated.id).catch(console.error);
+            }
+            return updated;
+        }
+
+        // Add metadata marker
+        const approvalStage = actorRole === 'User' ? 'EDITOR' : 'MANAGER';
+        const newMetadata = { ...(existing.content as Record<string, any>)?.metadata, approvalStage };
+        const newContent = { ...(existing.content as Record<string, any>), metadata: newMetadata };
+
         const [updated] = await this.db.update(campaigns)
-            .set({ status: 'PENDING' })
-            .where(and(
-                eq(campaigns.id, id),
-                eq(campaigns.workspaceId, workspaceId),
-                eq(campaigns.status, 'DRAFT')
-            ))
+            .set({ status: 'PENDING', content: newContent })
+            .where(eq(campaigns.id, id))
             .returning();
 
         if (updated) {
-            this.notifyApprovers(workspaceId, id, actorId).catch(err => {
-                console.error(`Failed to notify approvers for campaign ${id}:`, err);
-            });
+            this.notifyApprovers(workspaceId, id, actorId, approvalStage).catch(console.error);
         }
 
         return updated;
@@ -204,11 +238,12 @@ export class CampaignsService {
             throw new Error("Campaign not found or not in PENDING state.");
         }
 
-        await this.notifyApprovers(workspaceId, id, actorId);
+        const approvalStage = (existing.content as any)?.metadata?.approvalStage || 'MANAGER';
+        await this.notifyApprovers(workspaceId, id, actorId, approvalStage);
         return existing;
     }
 
-    private async notifyApprovers(workspaceId: string, campaignId: string, actorId: string) {
+    private async notifyApprovers(workspaceId: string, campaignId: string, actorId: string, stage: 'EDITOR' | 'MANAGER') {
         const workspace = await this.db.query.workspaces.findFirst({
             where: eq(workspaces.id, workspaceId),
         });
@@ -228,8 +263,7 @@ export class CampaignsService {
             ? `${(actor as any).employee.firstName} ${(actor as any).employee.surname}`
             : actor?.email || 'A user';
 
-        // Find all Admins or Managers in the workspace for MSGSCALE_BULK
-        const members = await this.db.select({ userRole: userRoles.role, email: users.email, firstName: sql<string>`${users.id}` /* Dummy for now, we'll fetch full user if needed */ })
+        const members = await this.db.select({ userRole: userRoles.role, email: users.email, firstName: sql<string>`${users.id}` })
             .from(workspaceMembers)
             .innerJoin(users, eq(workspaceMembers.userId, users.id))
             .innerJoin(userRoles, eq(users.id, userRoles.userId))
@@ -238,7 +272,12 @@ export class CampaignsService {
                 eq(userRoles.app, 'MSGSCALE_BULK')
             ));
 
-        const eligibleApprovers = members.filter(m => m.userRole === 'Admin' || m.userRole === 'Manager');
+        const eligibleApprovers = members.filter(m => {
+            if (m.userRole === 'Admin') return true;
+            if (stage === 'EDITOR') return m.userRole === 'Manager' || m.userRole === 'Editor';
+            if (stage === 'MANAGER') return m.userRole === 'Manager';
+            return false;
+        });
 
         // Deduplicate by email
         const uniqueEmails = Array.from(new Set(eligibleApprovers.map(m => m.email.toLowerCase())));
@@ -273,11 +312,8 @@ export class CampaignsService {
         }
     }
 
-    async approveCampaign(id: string, workspaceId: string, approverId: string, action: 'APPROVE' | 'REJECT') {
-        const status = action === 'APPROVE' ? 'APPROVED' : 'REJECTED';
-
+    async approveCampaign(id: string, workspaceId: string, approverId: string, action: 'APPROVE' | 'REJECT', approverRole: string) {
         return await this.db.transaction(async (tx) => {
-            // Fetch first to check creator
             const existing = await tx.query.campaigns.findFirst({
                 where: and(
                     eq(campaigns.id, id),
@@ -286,13 +322,41 @@ export class CampaignsService {
                 )
             });
 
-            if (!existing) {
-                return null;
-            }
+            if (!existing) return null;
 
-            if (existing.creatorId === approverId) {
+            if (existing.creatorId === approverId && approverRole !== 'Admin') {
                 throw new Error("You cannot approve or reject your own campaign.");
             }
+
+            const currentStage = (existing.content as any)?.metadata?.approvalStage || 'MANAGER';
+
+            if (action === 'APPROVE' && approverRole !== 'Admin') {
+                if (currentStage === 'EDITOR' && approverRole !== 'Editor') {
+                    throw new Error("Unauthorized: Only Editors can perform the initial review stage.");
+                }
+                if (currentStage === 'MANAGER' && approverRole !== 'Manager') {
+                    throw new Error("Unauthorized: Only Managers can perform the final approval stage.");
+                }
+            }
+
+            // Step up to Manager Stage
+            if (action === 'APPROVE' && currentStage === 'EDITOR' && approverRole === 'Editor') {
+                const newMetadata = { ...(existing.content as Record<string, any>)?.metadata, approvalStage: 'MANAGER' };
+                const newContent = { ...(existing.content as Record<string, any>), metadata: newMetadata };
+                
+                const [updated] = await tx.update(campaigns)
+                    .set({ content: newContent })
+                    .where(eq(campaigns.id, id))
+                    .returning();
+                
+                this.notifyApprovers(workspaceId, id, approverId, 'MANAGER').catch(console.error);
+                return updated;
+            }
+
+            // Final Approval or Reject
+            const status = action === 'APPROVE' 
+                ? (existing.scheduledAt && new Date(existing.scheduledAt) > new Date() ? 'SCHEDULED' : 'APPROVED') 
+                : 'REJECTED';
 
             const [updated] = await tx.update(campaigns)
                 .set({
@@ -303,32 +367,31 @@ export class CampaignsService {
                 .where(eq(campaigns.id, id))
                 .returning();
 
-            if (updated && action === 'APPROVE') {
-                // If not scheduled for future, run immediately
-                if (!updated.scheduledAt || new Date(updated.scheduledAt) <= new Date()) {
-                    const engine = new CampaignsEngine(this.db as any);
-                    // Run asynchronously in background so approval response is fast
-                    engine.executeCampaign(updated.id).catch(err => {
-                        console.error(`Automatic campaign execution failed for ${updated.id}:`, err);
-                    });
-                } else {
-                    // Mark as SCHEDULED
-                    await tx.update(campaigns)
-                        .set({ status: 'SCHEDULED' })
-                        .where(eq(campaigns.id, id));
-                }
+            if (updated && updated.status === 'APPROVED') {
+                const engine = new CampaignsEngine(this.db as any);
+                engine.executeCampaign(updated.id).catch(err => {
+                    console.error(`Automatic campaign execution failed for ${updated.id}:`, err);
+                });
             }
 
             return updated;
         });
     }
 
-    async deleteCampaign(id: string, workspaceId: string) {
+    async deleteCampaign(id: string, workspaceId: string, actorId: string, actorRole: string) {
+        const existing = await this.db.query.campaigns.findFirst({
+            where: and(eq(campaigns.id, id), eq(campaigns.workspaceId, workspaceId))
+        });
+        if (!existing) return null;
+
+        if (actorRole === 'User' || actorRole === 'Editor') {
+            if (existing.creatorId !== actorId) {
+                throw new Error('You can only delete your own campaigns.');
+            }
+        }
+
         const [deleted] = await this.db.delete(campaigns)
-            .where(and(
-                eq(campaigns.id, id),
-                eq(campaigns.workspaceId, workspaceId)
-            ))
+            .where(eq(campaigns.id, id))
             .returning();
         return deleted;
     }

@@ -183,19 +183,36 @@ export class CampaignsEngine {
                 });
                 groupContactIds = members.map(m => m.customerId);
             } else if (group.type === 'dynamic' && (group as any).rules?.length > 0) {
-                const conditions = (group as any).rules.map((rule: any) => {
-                    const column = (bulkCustomers as any)[rule.field];
-                    if (!column) return sql`1=1`;
-                    switch (rule.operator) {
-                        case 'equals': return eq(column, rule.value);
-                        case 'not_equals': return sql`${column} != ${rule.value}`;
-                        case 'contains': return sql`${column} ILIKE ${'%' + rule.value + '%'}`;
-                        case 'starts_with': return sql`${column} ILIKE ${rule.value + '%'}`;
-                        default: return sql`1=1`;
+                const rulesArr: any[] = (group as any).rules;
+                let querySql = sql`1=1`;
+                
+                for (let i = 0; i < rulesArr.length; i++) {
+                    const r = rulesArr[i];
+                    const column = (bulkCustomers as any)[r.field];
+                    let condition = sql`1=1`;
+                    
+                    if (column) {
+                        switch (r.operator) {
+                            case 'equals': condition = sql`${column} = ${r.value}`; break;
+                            case 'not_equals': condition = sql`${column} != ${r.value}`; break;
+                            case 'contains': condition = sql`${column} ILIKE ${'%' + r.value + '%'}`; break;
+                            case 'starts_with': condition = sql`${column} ILIKE ${r.value + '%'}`; break;
+                        }
                     }
-                });
+
+                    if (i === 0) {
+                        querySql = condition;
+                    } else {
+                        if (r.logicGate === 'OR') {
+                            querySql = sql`${querySql} OR ${condition}`;
+                        } else {
+                            querySql = sql`${querySql} AND ${condition}`;
+                        }
+                    }
+                }
+
                 const members = await this.dbClient.query.bulkCustomers.findMany({
-                    where: and(...conditions)
+                    where: sql`(${querySql})`
                 });
                 groupContactIds = members.map(m => m.id);
             }

@@ -340,6 +340,7 @@ export const groupRules = pgTable('GROUP_RULE', {
     field: text('field').notNull(),
     operator: ruleOperatorEnum('operator').notNull(),
     value: text('value').notNull(),
+    logicGate: text('logicGate').default('AND').notNull(),
 });
 
 // --- RELATIONS ---

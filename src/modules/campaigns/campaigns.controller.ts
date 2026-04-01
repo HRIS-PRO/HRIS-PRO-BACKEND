@@ -52,7 +52,7 @@ export class CampaignsController {
         const data = request.body;
 
         try {
-            this.checkRole(request, ['Admin', 'Manager', 'Editor']);
+            this.checkRole(request, ['Admin', 'Manager', 'Editor', 'User']);
             const campaign = await this.campaignsService.createCampaign(workspaceId, userId, data);
             return reply.code(201).send(campaign);
         } catch (error: any) {
@@ -85,7 +85,7 @@ export class CampaignsController {
     ) {
         const { workspaceId, id } = request.params;
         try {
-            this.checkRole(request, ['Admin', 'Manager', 'Editor']);
+            this.checkRole(request, ['Admin', 'Manager', 'Editor', 'User']);
             const campaign = await this.campaignsService.updateCampaign(id, workspaceId, request.body);
             return reply.send(campaign);
         } catch (error: any) {
@@ -99,8 +99,8 @@ export class CampaignsController {
     ) {
         const { workspaceId, id } = request.params;
         try {
-            this.checkRole(request, ['Admin', 'Manager', 'Editor']);
-            const campaign = await this.campaignsService.submitCampaign(id, workspaceId, (request.user as any)?.id as string);
+            const role = this.checkRole(request, ['Admin', 'Manager', 'Editor', 'User']);
+            const campaign = await this.campaignsService.submitCampaign(id, workspaceId, (request.user as any)?.id as string, role);
             if (!campaign) {
                 return reply.code(400).send({ message: 'Campaign must be in DRAFT status to submit' });
             }
@@ -133,8 +133,8 @@ export class CampaignsController {
         const { action } = request.body;
 
         try {
-            this.checkRole(request, ['Admin', 'Manager']);
-            const campaign = await this.campaignsService.approveCampaign(id, workspaceId, userId, action);
+            const role = this.checkRole(request, ['Admin', 'Manager', 'Editor']);
+            const campaign = await this.campaignsService.approveCampaign(id, workspaceId, userId, action, role);
             if (!campaign) {
                 return reply.code(400).send({ message: 'Campaign must be in PENDING status to approve/reject' });
             }
@@ -150,8 +150,8 @@ export class CampaignsController {
     ) {
         const { workspaceId, id } = request.params;
         try {
-            this.checkRole(request, ['Admin', 'Manager']);
-            const campaign = await this.campaignsService.deleteCampaign(id, workspaceId);
+            const role = this.checkRole(request, ['Admin', 'Manager', 'Editor', 'User']);
+            const campaign = await this.campaignsService.deleteCampaign(id, workspaceId, (request.user as any).id, role);
             if (!campaign) {
                 return reply.code(404).send({ message: 'Campaign not found' });
             }
