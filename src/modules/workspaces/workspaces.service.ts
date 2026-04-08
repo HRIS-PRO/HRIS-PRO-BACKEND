@@ -564,6 +564,108 @@ export class WorkspacesService {
         return enrichedGroups;
     }
 
+    async getGroup(workspaceId: string, groupId: string) {
+        const group = await this.db.query.groups.findFirst({
+            where: and(eq(groups.id, groupId), eq(groups.workspaceId, workspaceId)),
+            with: {
+                rules: true,
+                members: true,
+            },
+        });
+        if (!group) throw new Error('Group not found');
+
+        return {
+            ...group,
+            customerIds: (group as any).members?.map((m: any) => m.customerId) || []
+        };
+    }
+
+    async updateGroup(workspaceId: string, groupId: string, data: {
+        name?: string;
+        type?: 'static' | 'dynamic';
+        customerIds?: string[];
+        rules?: { field: string; operator: 'equals' | 'contains' | 'starts_with' | 'not_equals'; value: string; logicGate?: 'AND' | 'OR' }[];
+    }) {
+        return await this.db.transaction(async (tx) => {
+            // 1. Verify existence
+            const existingGroup = await tx.query.groups.findFirst({
+                where: and(eq(groups.id, groupId), eq(groups.workspaceId, workspaceId)),
+            });
+            if (!existingGroup) throw new Error('Group not found');
+
+            // 2. Update base info
+            await tx.update(groups)
+                .set({
+                    name: data.name ?? existingGroup.name,
+                    type: data.type ?? existingGroup.type,
+                    updatedAt: new Date(),
+                })
+                .where(eq(groups.id, groupId));
+
+            // 3. If type changed or data provided, update members/rules
+            if (data.type || data.customerIds || data.rules) {
+                const finalType = data.type ?? existingGroup.type;
+
+                if (finalType === 'static') {
+                    // Clear rules if any
+                    await tx.delete(groupRules).where(eq(groupRules.groupId, groupId));
+                    // Update members if provided
+                    if (data.customerIds) {
+                        await tx.delete(groupMembers).where(eq(groupMembers.groupId, groupId));
+                        if (data.customerIds.length > 0) {
+                            const memberInserts = data.customerIds.map(customerId => ({
+                                groupId,
+                                customerId,
+                            }));
+                            const BATCH_SIZE = 1000;
+                            for (let i = 0; i < memberInserts.length; i += BATCH_SIZE) {
+                                await tx.insert(groupMembers).values(memberInserts.slice(i, i + BATCH_SIZE));
+                            }
+                        }
+                    }
+                } else {
+                    // Clear members if any
+                    await tx.delete(groupMembers).where(eq(groupMembers.groupId, groupId));
+                    // Update rules if provided
+                    if (data.rules) {
+                        await tx.delete(groupRules).where(eq(groupRules.groupId, groupId));
+                        if (data.rules.length > 0) {
+                            const ruleInserts = data.rules.map(rule => ({
+                                groupId,
+                                field: rule.field,
+                                operator: rule.operator as any,
+                                value: rule.value,
+                                logicGate: rule.logicGate || 'AND',
+                            }));
+                            await tx.insert(groupRules).values(ruleInserts);
+                        }
+                    }
+                }
+            }
+
+            return { success: true };
+        });
+    }
+
+    async deleteGroup(workspaceId: string, groupId: string) {
+        return await this.db.transaction(async (tx) => {
+            // 1. Verify
+            const group = await tx.query.groups.findFirst({
+                where: and(eq(groups.id, groupId), eq(groups.workspaceId, workspaceId)),
+            });
+            if (!group) throw new Error('Group not found');
+
+            // 2. Delete related data
+            await tx.delete(groupMembers).where(eq(groupMembers.groupId, groupId));
+            await tx.delete(groupRules).where(eq(groupRules.groupId, groupId));
+
+            // 3. Delete group
+            await tx.delete(groups).where(eq(groups.id, groupId));
+
+            return { success: true };
+        });
+    }
+
     async addGroupMembers(workspaceId: string, groupId: string, customerIds: string[]) {
         if (!customerIds || customerIds.length === 0) return { added: 0 };
 

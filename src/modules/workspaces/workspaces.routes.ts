@@ -102,6 +102,21 @@ export default async function workspacesRoutes(app: FastifyInstance) {
         workspacesController.getGroups.bind(workspacesController)
     );
 
+    app.get(
+        '/:workspaceId/groups/:groupId',
+        workspacesController.getGroup.bind(workspacesController)
+    );
+
+    app.patch(
+        '/:workspaceId/groups/:groupId',
+        workspacesController.updateGroup.bind(workspacesController)
+    );
+
+    app.delete(
+        '/:workspaceId/groups/:groupId',
+        workspacesController.deleteGroup.bind(workspacesController)
+    );
+
     app.post(
         '/:workspaceId/groups/:groupId/members',
         workspacesController.addGroupMembers.bind(workspacesController)

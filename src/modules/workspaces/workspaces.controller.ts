@@ -252,6 +252,46 @@ export class WorkspacesController {
         }
     }
 
+    async getGroup(
+        request: FastifyRequest<{ Params: { workspaceId: string, groupId: string } }>,
+        reply: FastifyReply
+    ) {
+        const { workspaceId, groupId } = request.params;
+        try {
+            const group = await this.workspacesService.getGroup(workspaceId, groupId);
+            return reply.send(group);
+        } catch (error: any) {
+            return reply.code(404).send({ message: error.message || 'Group not found' });
+        }
+    }
+
+    async updateGroup(
+        request: FastifyRequest<{ Params: { workspaceId: string, groupId: string }, Body: any }>,
+        reply: FastifyReply
+    ) {
+        const { workspaceId, groupId } = request.params;
+        const data = request.body as any;
+        try {
+            const result = await this.workspacesService.updateGroup(workspaceId, groupId, data);
+            return reply.send(result);
+        } catch (error: any) {
+            return reply.code(400).send({ message: error.message || 'Failed to update group' });
+        }
+    }
+
+    async deleteGroup(
+        request: FastifyRequest<{ Params: { workspaceId: string, groupId: string } }>,
+        reply: FastifyReply
+    ) {
+        const { workspaceId, groupId } = request.params;
+        try {
+            const result = await this.workspacesService.deleteGroup(workspaceId, groupId);
+            return reply.send(result);
+        } catch (error: any) {
+            return reply.code(400).send({ message: error.message || 'Failed to delete group' });
+        }
+    }
+
     async addGroupMembers(
         request: FastifyRequest<{ Params: { workspaceId: string, groupId: string }, Body: { customerIds: string[] } }>,
         reply: FastifyReply

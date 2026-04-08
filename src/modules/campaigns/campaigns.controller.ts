@@ -52,7 +52,12 @@ export class CampaignsController {
         const data = request.body;
 
         try {
-            this.checkRole(request, ['Admin', 'Manager', 'Editor', 'User']);
+            const role = this.checkRole(request, ['Admin', 'Manager', 'Editor', 'User']);
+            
+            if ((data.cycleConfig || data.anniversaryConfig) && role !== 'Admin' && role !== 'Manager') {
+                return reply.code(403).send({ message: 'Only Managers and Admins can create recurring campaigns' });
+            }
+
             const campaign = await this.campaignsService.createCampaign(workspaceId, userId, data);
             return reply.code(201).send(campaign);
         } catch (error: any) {
@@ -85,8 +90,14 @@ export class CampaignsController {
     ) {
         const { workspaceId, id } = request.params;
         try {
-            this.checkRole(request, ['Admin', 'Manager', 'Editor', 'User']);
-            const campaign = await this.campaignsService.updateCampaign(id, workspaceId, request.body);
+            const role = this.checkRole(request, ['Admin', 'Manager', 'Editor', 'User']);
+            const data = request.body;
+
+            if ((data.cycleConfig || data.anniversaryConfig) && role !== 'Admin' && role !== 'Manager') {
+                return reply.code(403).send({ message: 'Only Managers and Admins can manage recurring campaigns' });
+            }
+
+            const campaign = await this.campaignsService.updateCampaign(id, workspaceId, data);
             return reply.send(campaign);
         } catch (error: any) {
             return reply.code(error.message.includes('Unauthorized') ? 403 : 400).send({ message: error.message });
