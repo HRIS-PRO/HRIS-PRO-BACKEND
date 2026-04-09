@@ -144,7 +144,7 @@ export const assets = pgTable("ASSET", {
     manager: text("manager"),
     status: assetStatusEnum("status").default("IDLE").notNull(),
     purchaseDate: text("purchaseDate").notNull(), // Storing as ISO string to match frontend
-    purchasePrice: integer("purchasePrice").notNull(),
+    purchasePrice: text("purchasePrice").notNull(),
     condition: text("condition").notNull(),
     location: text("location").notNull(),
     serialNumber: text("serialNumber"),

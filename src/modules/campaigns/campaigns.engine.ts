@@ -265,7 +265,20 @@ export class CampaignsEngine {
                 const contactKeyEmail = normalizeIdentifier(contact.email);
                 const contextualData = externalDataMap.get(contactKeyPhone) || externalDataMap.get(contactKeyEmail) || {};
 
-                const body = this.injectVariables(content.body, contact, contextualData);
+                let body = this.injectVariables(content.body, contact, contextualData);
+                
+                // If SMS or WHATSAPP, strip HTML tags from body
+                if (campaign.channel === 'SMS' || campaign.channel === 'WHATSAPP') {
+                    body = body.replace(/<[^>]*>/g, '');
+                    // Handle common entities
+                    body = body.replace(/&nbsp;/g, ' ')
+                               .replace(/&amp;/g, '&')
+                               .replace(/&lt;/g, '<')
+                               .replace(/&gt;/g, '>')
+                               .replace(/&quot;/g, '"')
+                               .replace(/&#39;/g, "'");
+                }
+                
                 const subject = content.subject ? this.injectVariables(content.subject, contact, contextualData) : "Mass Message";
                 const preheader = content.preheader ? this.injectVariables(content.preheader, contact, contextualData) : "";
 

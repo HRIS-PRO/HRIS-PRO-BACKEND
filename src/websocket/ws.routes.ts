@@ -13,9 +13,14 @@ export async function wsRoutes(app: FastifyInstance) {
      */
     app.get('/ws', { websocket: true }, async (connection: any, request: FastifyRequest<{ Querystring: { token?: string } }>) => {
         let userId: string | null = null;
-        const socket = connection.socket;
+        const socket = connection?.socket || connection;
 
         try {
+            if (!socket || typeof socket.send !== 'function') {
+                app.log.error('WS Connection failed: No valid socket found on connection object');
+                return;
+            }
+
             const token = (request.query as any).token as string | undefined;
             if (!token) throw new Error('No token provided');
 
@@ -30,9 +35,12 @@ export async function wsRoutes(app: FastifyInstance) {
             }));
 
             app.log.info(`WS connected: userId=${userId}, total=${wsManager.connectedUserCount}`);
-        } catch (err) {
-            socket.send(JSON.stringify({ type: 'connection:error', payload: { message: 'Unauthorized' } }));
-            socket.close();
+        } catch (err: any) {
+            app.log.error(`WS Auth Error: ${err.message}`);
+            if (socket && typeof socket.send === 'function' && socket.readyState === 1) {
+                socket.send(JSON.stringify({ type: 'connection:error', payload: { message: 'Unauthorized' } }));
+                socket.close();
+            }
         }
     });
 }

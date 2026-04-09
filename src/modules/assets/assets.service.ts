@@ -39,15 +39,15 @@ export class AssetsService {
         const cleanDescription = data.description?.trim() || 'n/a';
         const cleanSerialNumber = data.serialNumber?.trim() || null;
 
-        // Generate ID
-        const assetId = cleanSerialNumber ? cleanSerialNumber : `AST-${Math.floor(Math.random() * 10000)}`;
+        // Generate ID - Always use a unique internal ID
+        const assetId = `AST-${Math.floor(100000 + Math.random() * 900000)}`;
 
         // Save to Database
         const [newAsset] = await this.db.insert(assets).values({
             id: assetId,
             name: data.name,
             category: data.category,
-            purchasePrice: Number(data.purchasePrice) || 0,
+            purchasePrice: data.purchasePrice?.toString() || "0",
             purchaseDate: data.purchaseDate,
             condition: data.condition,
             location: data.location || 'N/A',
@@ -108,6 +108,53 @@ export class AssetsService {
         }
 
         return newAsset;
+    }
+
+    async bulkCreateAssets(assetsData: any[]) {
+        const results = [];
+        for (const data of assetsData) {
+            try {
+                const status = data.assignedTo && data.assignedTo.trim() !== '' ? 'PENDING' : 'IDLE';
+                const cleanAssignedTo = data.assignedTo?.trim() || null;
+                const cleanSerialNumber = data.serialNumber?.trim() || null;
+                // Generate a unique internal ID for each imported row
+                const assetId = `AST-B-${Math.floor(Math.random() * 16777215).toString(16).toUpperCase()}`;
+
+                const values = {
+                    id: assetId,
+                    name: data.name || 'Unnamed Asset',
+                    category: data.category || 'General',
+                    purchasePrice: data.purchasePrice?.toString() || "0",
+                    purchaseDate: data.purchaseDate || new Date().toISOString().split('T')[0],
+                    condition: data.condition || 'Good',
+                    location: data.location || 'N/A',
+                    department: data.department || 'N/A',
+                    manager: data.manager || 'N/A',
+                    serialNumber: cleanSerialNumber,
+                    description: data.description || 'Batch Import',
+                    assignedTo: cleanAssignedTo,
+                    status,
+                    fileUrl: null,
+                };
+
+                const [newAsset] = await this.db.insert(assets).values(values).returning();
+                
+                await this.db.insert(assetActivities).values({
+                    type: 'system',
+                    title: 'Hardware Provisioned (Batch)',
+                    desc: `${newAsset.name} was added via bulk import.`,
+                    icon: 'inventory_2',
+                    color: 'indigo',
+                    roles: ['SUPER_ADMIN', 'ADMIN_USER', 'AUDITOR'],
+                    assetId: newAsset.id
+                });
+
+                results.push(newAsset);
+            } catch (err) {
+                console.error("Bulk Import Row Error:", err);
+            }
+        }
+        return results;
     }
 
     async acceptAsset(assetId: string) {

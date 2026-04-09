@@ -19,14 +19,12 @@ export class AssetsController {
                     fileType = part.mimetype;
                 } else {
                     try {
-                        // Assuming the frontend sends metadata stringified under a "data" field
                         if (part.fieldname === 'data') {
                             parsedData = JSON.parse(part.value as string);
                         } else {
                             parsedData[part.fieldname] = part.value;
                         }
                     } catch (e) {
-                        // Fallback for simple key-value FormData
                         parsedData[part.fieldname] = part.value;
                     }
                 }
@@ -37,6 +35,20 @@ export class AssetsController {
         } catch (error: any) {
             request.log.error(error);
             return reply.status(500).send({ message: error.message || 'Failed to create asset' });
+        }
+    }
+
+    async bulkCreateAssets(request: FastifyRequest<{ Body: any[] }>, reply: FastifyReply) {
+        try {
+            const assetsData = request.body;
+            if (!Array.isArray(assetsData)) {
+                return reply.status(400).send({ message: 'Request body must be an array of assets' });
+            }
+            const newAssets = await this.assetsService.bulkCreateAssets(assetsData);
+            return reply.status(201).send(newAssets);
+        } catch (error: any) {
+            request.log.error(error);
+            return reply.status(500).send({ message: error.message || 'Failed to bulk create assets' });
         }
     }
 

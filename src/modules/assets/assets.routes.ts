@@ -14,6 +14,10 @@ export async function assetsRoutes(app: FastifyInstance) {
         '/',
         assetsController.createAsset.bind(assetsController)
     );
+    app.post(
+        '/bulk-create',
+        assetsController.bulkCreateAssets.bind(assetsController)
+    );
     app.put(
         '/:id/accept',
         assetsController.acceptAsset.bind(assetsController)

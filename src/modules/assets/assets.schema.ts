@@ -4,7 +4,7 @@ export const createAssetSchema = z.object({
     name: z.string().min(1),
     category: z.string().min(1),
     serialNumber: z.string().optional(),
-    purchasePrice: z.string().transform(Number),
+    purchasePrice: z.union([z.string(), z.number()]).transform(String),
     purchaseDate: z.string().min(1),
     condition: z.string().min(1),
     location: z.string().min(1),
