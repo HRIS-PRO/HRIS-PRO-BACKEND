@@ -1,7 +1,7 @@
 import { eq, and, inArray, notInArray, sql, or, like, ilike } from 'drizzle-orm';
 import { db } from '../../db';
-import { normalizeIdentifier, normalizePhoneNumber } from '../../utils/phone-utils';
-import { workspaces, workspaceMembers, users, userRoles, employees, bulkCustomers, groups, groupMembers, groupContextualData, groupRules, campaigns, campaignAnalytics } from '../../db/schema';
+import { auditResultEnum, campaignAnalytics, campaignRecipients, campaigns, groups, groupMembers, workspaces, workspaceMembers, users, userRoles, employees, bulkCustomers, groupRules, groupContextualData } from '../../db/schema';
+import { normalizePhoneNumber, normalizeIdentifier } from '../../utils/phone-utils';
 import { CreateWorkspaceInput, UpdateWorkspaceInput } from './workspaces.schema';
 import { sendEmail } from '../shared/zepto';
 
@@ -287,44 +287,55 @@ export class WorkspacesService {
     async bulkAddCustomers(customersData: any[]) {
         if (!customersData || customersData.length === 0) return { added: 0, skipped: 0 };
 
-        const mappedCustomers = customersData.map(data => ({
-            customerType: data.customerType || data['Customer Type'] || 'Retail',
-            customerExternalId: data.customerExternalId || data['Customer External ID'] || data['Customer Id'] || '',
-            title: data.title || data['Title'] || '',
-            surname: data.surname || data['Surname'] || '',
-            firstName: data.firstName || data['First Name'] || '',
-            otherName: data.otherName || data['Other Name'] || '',
-            fullName: data.fullName || data['Full Name'] || `${data.firstName || data['First Name'] || ''} ${data.surname || data['Surname'] || ''}`.trim(),
-            dob: data.dob || data['Date of Birth'] || data['DOB'] || '',
-            gender: data.gender || data['Gender'] || '',
-            nationality: data.nationality || data['Nationality'] || '',
-            stateOfOrigin: data.stateOfOrigin || data['State of Origin'] || '',
-            residentialState: data.residentialState || data['Residential State'] || '',
-            residentialTown: data.residentialTown || data['Residential Town'] || '',
-            address: data.address || data['Address'] || '',
-            mobilePhone: data.mobilePhone || data['Mobile Phone'] || '',
-            bvn: data.bvn || data['BVN'] || '',
-            nin: data.nin || data['NIN'] || '',
-            email: data.email || data['Email'] || data['EMAIL'] || '',
-            tin: data.tin || data['TIN'] || '',
-            educationLevel: data.educationLevel || data['Education Level'] || '',
-            occupation: data.occupation || data['Occupation'] || '',
-            sector: data.sector || data['Sector'] || '',
-            office: data.office || data['Office'] || '',
-            officePhone: data.officePhone || data['Office Phone'] || '',
-            officeAddress: data.officeAddress || data['Office Address'] || '',
-            nextOfKin: data.nextOfKin || data['Next of Kin'] || '',
-            nextOfKinAddress: data.nextOfKinAddress || data['Next of Kin Address'] || '',
-            nextOfKinPhone: data.nextOfKinPhone || data['Next of Kin Phone'] || data['Next Of Kin Phone'] || '',
-            idCardType: data.idCardType || data['ID Card Type'] || data['Id Card Type'] || '',
-            idCardNo: data.idCardNo || data['ID Card No'] || data['Id Card No'] || '',
-            idIssueDate: data.idIssueDate || data['ID Issue Date'] || data['Id Issue Date'] || '',
-            idExpiryDate: data.idExpiryDate || data['ID Expiry Date'] || data['Id Expiry Date'] || '',
-            isPep: data.isPep || data['Is PEP'] || data['Is Pep'] || 'No',
-            pepDetails: data.pepDetails || data['PEP Details'] || data['Pep Details'] || '',
-            externalCreatedAt: data.externalCreatedAt || data['External Created At'] || data['Created On'] || new Date().toISOString(),
-            customFields: JSON.stringify(data.customFields || {}),
-        }));
+        const mappedCustomers = customersData.map(data => {
+            const customerType = data.customerType || data['Customer Type'] || (data['Registration No'] ? 'Corporate' : 'Retail');
+            const mobilePhone = normalizePhoneNumber(data.mobilePhone || data['Mobile Phone'] || data['Phone No'] || '');
+            
+            return {
+                customerType,
+                customerExternalId: String(data.customerExternalId || data['Customer External ID'] || data['Customer Id'] || ''),
+                title: data.title || data['Title'] || '',
+                surname: data.surname || data['Surname'] || '',
+                firstName: data.firstName || data['First Name'] || '',
+                otherName: data.otherName || data['Other Name'] || '',
+                fullName: data.fullName || data['Full Name'] || data['Name'] || `${data.firstName || data['First Name'] || ''} ${data.surname || data['Surname'] || ''}`.trim(),
+                dob: data.dob || data['Date of Birth'] || data['DOB'] || '',
+                gender: data.gender || data['Gender'] || '',
+                nationality: data.nationality || data['Nationality'] || '',
+                stateOfOrigin: data.stateOfOrigin || data['State of Origin'] || '',
+                residentialState: data.residentialState || data['Residential State'] || '',
+                residentialTown: data.residentialTown || data['Residential Town'] || '',
+                address: data.address || data['Address'] || '',
+                mobilePhone,
+                bvn: data.bvn || data['BVN'] || '',
+                nin: data.nin || data['NIN'] || '',
+                email: (data.email || data['Email'] || data['Email Address'] || '').trim().toLowerCase(),
+                tin: data.tin || data['TIN'] || data['Tax Identification No'] || '',
+                educationLevel: data.educationLevel || data['Education Level'] || '',
+                occupation: data.occupation || data['Occupation'] || '',
+                sector: data.sector || data['Sector'] || '',
+                office: data.office || data['Office'] || '',
+                officePhone: normalizePhoneNumber(data.officePhone || data['Office Phone'] || data['Office No'] || ''),
+                officeAddress: data.officeAddress || data['Office Address'] || '',
+                nextOfKin: data.nextOfKin || data['Next of Kin'] || '',
+                nextOfKinAddress: data.nextOfKinAddress || data['Next of Kin Address'] || '',
+                nextOfKinPhone: normalizePhoneNumber(data.nextOfKinPhone || data['Next of Kin Phone'] || ''),
+                idCardType: data.idCardType || data['ID Card Type'] || '',
+                idCardNo: data.idCardNo || data['ID Card No'] || '',
+                idIssueDate: data.idIssueDate || data['ID Issue Date'] || '',
+                idExpiryDate: data.idExpiryDate || data['ID Expiry Date'] || '',
+                isPep: data.isPep || data['Is PEP'] || 'No',
+                pepDetails: data.pepDetails || data['PEP Details'] || '',
+                registrationNo: data.registrationNo || data['Registration No'] || '',
+                dateOfIncorporation: data.dateOfIncorporation || data['Date Of Incorporation'] || '',
+                countryOfIncorporation: data.countryOfIncorporation || data['Country Of Incorporation'] || '',
+                stateOfIncorporation: data.stateOfIncorporation || data['State Of Incorporation'] || '',
+                contactPerson: data.contactPerson || data['Contact Person'] || '',
+                accountOfficer: data.accountOfficer || data['Account Officer'] || '',
+                externalCreatedAt: data.externalCreatedAt || data['External Created At'] || new Date().toISOString(),
+                customFields: JSON.stringify(data.customFields || {}),
+            };
+        });
 
         const phones = mappedCustomers.map(c => c.mobilePhone).filter(Boolean);
         const emails = mappedCustomers.map(c => c.email).filter(Boolean);
@@ -903,5 +914,10 @@ export class WorkspacesService {
             chartData,
             channelHealth
         };
+    }
+
+    async clearAllBulkCustomers() {
+        const result = await this.db.delete(bulkCustomers).returning({ id: bulkCustomers.id });
+        return { deleted: result.length };
     }
 }

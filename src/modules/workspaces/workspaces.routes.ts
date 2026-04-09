@@ -90,6 +90,10 @@ export default async function workspacesRoutes(app: FastifyInstance) {
         '/customers/bulk',
         workspacesController.deleteBulkCustomers.bind(workspacesController)
     );
+    app.delete(
+        '/customers/all',
+        workspacesController.clearAllBulkCustomers.bind(workspacesController)
+    );
 
     app.post(
         '/customers/find-by-identifiers',

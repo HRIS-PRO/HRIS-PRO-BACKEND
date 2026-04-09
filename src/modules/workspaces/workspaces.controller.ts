@@ -331,4 +331,16 @@ export class WorkspacesController {
             return reply.code(500).send({ message: error.message || 'Failed to fetch dashboard stats' });
         }
     }
+
+    async clearAllBulkCustomers(
+        request: FastifyRequest,
+        reply: FastifyReply
+    ) {
+        try {
+            const result = await this.workspacesService.clearAllBulkCustomers();
+            return reply.send(result);
+        } catch (error: any) {
+            return reply.code(400).send({ message: error.message || 'Failed to clear customers' });
+        }
+    }
 }

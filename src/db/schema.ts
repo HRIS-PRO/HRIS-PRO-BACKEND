@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, uuid, pgEnum, integer, jsonb, primaryKey, boolean } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, uuid, pgEnum, integer, jsonb, primaryKey, boolean, index } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 
 // Enums
@@ -305,11 +305,21 @@ export const bulkCustomers = pgTable("BULK_CUSTOMER", {
     idExpiryDate: text("idExpiryDate"),
     isPep: text("isPep"),
     pepDetails: text("pepDetails"),
+    registrationNo: text("registrationNo"),
+    dateOfIncorporation: text("dateOfIncorporation"),
+    countryOfIncorporation: text("countryOfIncorporation"),
+    stateOfIncorporation: text("stateOfIncorporation"),
+    contactPerson: text("contactPerson"),
+    accountOfficer: text("accountOfficer"),
     externalCreatedAt: text("externalCreatedAt"),
     customFields: jsonb("customFields").default({}),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
-});
+}, (table) => ({
+    mobileIdx: index("bulk_customer_mobile_idx").on(table.mobilePhone),
+    emailIdx: index("bulk_customer_email_idx").on(table.email),
+    typeIdx: index("bulk_customer_type_idx").on(table.customerType),
+}));
 
 export const bulkCustomersRelations = relations(bulkCustomers, ({ many }) => ({
     groupMemberships: many(groupMembers),
