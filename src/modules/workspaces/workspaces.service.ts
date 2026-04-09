@@ -1,6 +1,7 @@
 import { eq, and, inArray, notInArray, sql, or, like, ilike } from 'drizzle-orm';
 import { db } from '../../db';
-import { workspaces, workspaceMembers, users, userRoles, employees, bulkCustomers, groups, groupMembers, groupRules, campaigns, campaignAnalytics } from '../../db/schema';
+import { normalizeIdentifier, normalizePhoneNumber } from '../../utils/phone-utils';
+import { workspaces, workspaceMembers, users, userRoles, employees, bulkCustomers, groups, groupMembers, groupContextualData, groupRules, campaigns, campaignAnalytics } from '../../db/schema';
 import { CreateWorkspaceInput, UpdateWorkspaceInput } from './workspaces.schema';
 import { sendEmail } from '../shared/zepto';
 
@@ -436,6 +437,33 @@ export class WorkspacesService {
         };
     }
 
+    async findCustomersByIdentifiers(identifiers: string[]) {
+        if (!identifiers || identifiers.length === 0) return [];
+
+        const normalizedInputs = identifiers.map(id => normalizeIdentifier(id));
+        const cleanDigitsOnly = identifiers.map(id => id.replace(/\D/g, ''));
+
+        // We want to match if:
+        // 1. Literal email match
+        // 2. Literal phone match
+        // 3. Normalized input matches normalized DB phone
+        return await this.db.query.bulkCustomers.findMany({
+            where: or(
+                inArray(bulkCustomers.email, identifiers),
+                inArray(bulkCustomers.mobilePhone, identifiers),
+                // Advanced matching for phone numbers:
+                // Clean the DB column of non-digits and compare against cleaned inputs
+                inArray(sql`regexp_replace(${bulkCustomers.mobilePhone}, '[^0-9]', '', 'g')`, cleanDigitsOnly),
+                // Also check against 234-prefixed versions
+                inArray(sql`CASE 
+                    WHEN regexp_replace(${bulkCustomers.mobilePhone}, '[^0-9]', '', 'g') ~ '^0[789][01][0-9]{8}$' 
+                    THEN '234' || substr(regexp_replace(${bulkCustomers.mobilePhone}, '[^0-9]', '', 'g'), 2)
+                    ELSE regexp_replace(${bulkCustomers.mobilePhone}, '[^0-9]', '', 'g')
+                END`, normalizedInputs)
+            ),
+        });
+    }
+
     async deleteBulkCustomers(customerIds: string[]) {
         if (!customerIds || customerIds.length === 0) return { deleted: 0 };
 
@@ -453,6 +481,7 @@ export class WorkspacesService {
         type: 'static' | 'dynamic';
         customerIds?: string[];
         rules?: { field: string; operator: 'equals' | 'contains' | 'starts_with' | 'not_equals'; value: string; logicGate?: 'AND' | 'OR' }[];
+        contextualData?: { identifier: string; data: Record<string, string> }[];
     }) {
         return await this.db.transaction(async (tx) => {
             // 1. Create the base group
@@ -462,17 +491,58 @@ export class WorkspacesService {
                 type: data.type,
             }).returning();
 
-            // 2. Handle Static Group Members
-            if (data.type === 'static' && data.customerIds && data.customerIds.length > 0) {
-                const memberInserts = data.customerIds.map(customerId => ({
-                    groupId: newGroup.id,
-                    customerId,
-                }));
-                // Insert in batches if large, or just one go if small. Assuming < 10k for now.
-                // To be safe, chunk it to avoid Postgres parameter limits (65535)
-                const BATCH_SIZE = 1000;
-                for (let i = 0; i < memberInserts.length; i += BATCH_SIZE) {
-                    await tx.insert(groupMembers).values(memberInserts.slice(i, i + BATCH_SIZE));
+            // 2. Handle Static Group Members & Contextual Data
+            if (data.type === 'static') {
+                const finalCustomerIds = new Set(data.customerIds || []);
+                const contextualInserts: any[] = [];
+
+                if (data.contextualData && data.contextualData.length > 0) {
+                    const identifiers = data.contextualData.map(d => d.identifier);
+                    
+                    // Lookup customers by identifier (email or phone)
+                    const matchedCustomers = await tx.query.bulkCustomers.findMany({
+                        where: or(
+                            inArray(bulkCustomers.email, identifiers),
+                            inArray(bulkCustomers.mobilePhone, identifiers)
+                        )
+                    });
+
+                    // Create a lookup map for efficiency
+                    const customerMap = new Map<string, string>(); // identifier -> customerId
+                    matchedCustomers.forEach(c => {
+                        if (c.email) customerMap.set(c.email, c.id);
+                        if (c.mobilePhone) customerMap.set(c.mobilePhone, c.id);
+                    });
+
+                    for (const row of data.contextualData) {
+                        const customerId = customerMap.get(row.identifier);
+                        if (customerId) {
+                            finalCustomerIds.add(customerId);
+                            contextualInserts.push({
+                                groupId: newGroup.id,
+                                customerId,
+                                data: row.data
+                            });
+                        }
+                    }
+                }
+
+                if (finalCustomerIds.size > 0) {
+                    const memberInserts = Array.from(finalCustomerIds).map(customerId => ({
+                        groupId: newGroup.id,
+                        customerId,
+                    }));
+                    const BATCH_SIZE = 1000;
+                    for (let i = 0; i < memberInserts.length; i += BATCH_SIZE) {
+                        await tx.insert(groupMembers).values(memberInserts.slice(i, i + BATCH_SIZE));
+                    }
+                }
+
+                if (contextualInserts.length > 0) {
+                    const BATCH_SIZE = 1000;
+                    for (let i = 0; i < contextualInserts.length; i += BATCH_SIZE) {
+                        await tx.insert(groupContextualData).values(contextualInserts.slice(i, i + BATCH_SIZE));
+                    }
                 }
             }
 
@@ -569,14 +639,19 @@ export class WorkspacesService {
             where: and(eq(groups.id, groupId), eq(groups.workspaceId, workspaceId)),
             with: {
                 rules: true,
-                members: true,
+                members: {
+                    with: {
+                        customer: true
+                    }
+                },
             },
         });
         if (!group) throw new Error('Group not found');
 
         return {
             ...group,
-            customerIds: (group as any).members?.map((m: any) => m.customerId) || []
+            customerIds: (group as any).members?.map((m: any) => m.customerId) || [],
+            customers: (group as any).members?.map((m: any) => m.customer) || []
         };
     }
 

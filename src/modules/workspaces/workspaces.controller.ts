@@ -211,6 +211,19 @@ export class WorkspacesController {
         }
     }
 
+    async findCustomersByIdentifiers(
+        request: FastifyRequest<{ Body: { identifiers: string[] } }>,
+        reply: FastifyReply
+    ) {
+        const { identifiers } = request.body;
+        try {
+            const customers = await this.workspacesService.findCustomersByIdentifiers(identifiers);
+            return reply.send(customers);
+        } catch (error: any) {
+            return reply.code(400).send({ message: error.message || 'Failed to find customers' });
+        }
+    }
+
     async deleteBulkCustomers(
         request: FastifyRequest<{ Body: { customerIds: string[] } }>,
         reply: FastifyReply

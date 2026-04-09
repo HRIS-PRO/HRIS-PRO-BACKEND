@@ -91,6 +91,10 @@ export default async function workspacesRoutes(app: FastifyInstance) {
         workspacesController.deleteBulkCustomers.bind(workspacesController)
     );
 
+    app.post(
+        '/customers/find-by-identifiers',
+        workspacesController.findCustomersByIdentifiers.bind(workspacesController)
+    );
     // --- CONTACT GROUPS ---
     app.post(
         '/:workspaceId/groups',

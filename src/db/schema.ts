@@ -569,3 +569,26 @@ export const campaignExternalDataRelations = relations(campaignExternalData, ({ 
         references: [campaigns.id],
     }),
 }));
+
+// -----------------------------------------------------------------------------
+// Group Contextual Data
+// -----------------------------------------------------------------------------
+
+export const groupContextualData = pgTable("GROUP_CONTEXTUAL_DATA", {
+    id: uuid("id").primaryKey().defaultRandom(),
+    groupId: uuid("groupId").notNull().references(() => groups.id, { onDelete: 'cascade' }),
+    customerId: uuid("customerId").notNull().references(() => bulkCustomers.id, { onDelete: 'cascade' }),
+    data: jsonb("data").notNull(),            // { "Balance": "5000", "DueDate": "2024-12-01" }
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export const groupContextualDataRelations = relations(groupContextualData, ({ one }) => ({
+    group: one(groups, {
+        fields: [groupContextualData.groupId],
+        references: [groups.id],
+    }),
+    customer: one(bulkCustomers, {
+        fields: [groupContextualData.customerId],
+        references: [bulkCustomers.id],
+    }),
+}));

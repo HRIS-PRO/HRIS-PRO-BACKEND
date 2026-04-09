@@ -1,6 +1,6 @@
 import { eq, and, sql, inArray } from 'drizzle-orm';
 import { db } from '../../db';
-import { bulkCustomers, campaignAnalytics, campaigns, groupMembers, campaignExternalData } from '../../db/schema';
+import { bulkCustomers, campaignAnalytics, campaigns, groupMembers, campaignExternalData, groupContextualData, campaignRecipients } from '../../db/schema';
 import { addCampaignJob } from '../queue/queue.service';
 import { normalizeIdentifier } from '../../utils/phone-utils';
 
@@ -251,6 +251,23 @@ export class CampaignsEngine {
         const externalDataMap = new Map<string, any>();
         externalDataRecords.forEach(r => externalDataMap.set(r.identifier, r.data));
 
+        // Fetch Group Contextual Data for this campaign's target groups
+        const targetGroupIds = (campaign.recipients || []).map((r: any) => r.groupId).filter(Boolean);
+        const groupContextRecords = targetGroupIds.length > 0
+            ? await this.dbClient.query.groupContextualData.findMany({
+                where: inArray(groupContextualData.groupId, targetGroupIds)
+            })
+            : [];
+        
+        // Group context is keyed by customerId + groupId. 
+        // If a customer is in multiple groups, we'll take the first match we find.
+        const groupContextMap = new Map<string, any>(); // customerId -> data
+        groupContextRecords.forEach(r => {
+            if (!groupContextMap.has(r.customerId)) {
+                groupContextMap.set(r.customerId, r.data);
+            }
+        });
+
         const msPerHour = 3600000;
         const msDelayPerMsg = campaign.throttleRate && campaign.throttleRate > 0
             ? Math.floor(msPerHour / campaign.throttleRate)
@@ -263,7 +280,12 @@ export class CampaignsEngine {
                 // Merge external data if exists
                 const contactKeyPhone = normalizeIdentifier(contact.mobilePhone);
                 const contactKeyEmail = normalizeIdentifier(contact.email);
-                const contextualData = externalDataMap.get(contactKeyPhone) || externalDataMap.get(contactKeyEmail) || {};
+                
+                // Precedence: Campaign External Data > Group Contextual Data
+                const contextualData = {
+                    ...(groupContextMap.get(contact.id) || {}),
+                    ...(externalDataMap.get(contactKeyPhone) || externalDataMap.get(contactKeyEmail) || {})
+                };
 
                 let body = this.injectVariables(content.body, contact, contextualData);
                 
@@ -330,7 +352,15 @@ export class CampaignsEngine {
         // Inject Dynamic Contextual Data from CSV
         Object.keys(contextualData).forEach(key => {
             const regex = new RegExp(`{{${key}}}`, 'g');
-            result = result.replace(regex, contextualData[key] || "");
+            let value = contextualData[key] || "";
+            
+            // Auto-format numbers with commas (e.g. 2500 -> 2,500)
+            if (typeof value === 'number' || (!isNaN(Number(value)) && value.toString().length > 3 && !value.toString().includes('-'))) {
+                const num = Number(value);
+                value = num.toLocaleString('en-US');
+            }
+            
+            result = result.replace(regex, value);
         });
 
         return result;
