@@ -1,8 +1,9 @@
-import { eq, and, sql } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { db } from '../../db';
-import { workspaces, campaigns, campaignRecipients, campaignAnalytics, groupMembers, bulkCustomers, workspaceMembers, userRoles, users } from '../../db/schema';
+import { bulkCustomers, campaignAnalytics, campaigns, groupMembers, campaignExternalData, campaignRecipients, workspaceMembers, userRoles, users, workspaces } from '../../db/schema';
 import { CreateCampaignInput, UpdateCampaignInput } from './campaigns.schema';
 import { CampaignsEngine } from './campaigns.engine';
+import { normalizeIdentifier } from '../../utils/phone-utils';
 import { sendBulkEmail } from './zepto-bulk.service';
 import { sendEmail } from '../shared/zepto';
 
@@ -447,5 +448,29 @@ export class CampaignsService {
         // 2. Trigger the engine specifically for these IDs
         const engine = new CampaignsEngine(this.db as any);
         return await engine.executeCampaign(id, uniqueFailedIds);
+    }
+
+    async processExternalData(campaignId: string, rows: any[]) {
+        // 1. Clear existing external data for this campaign to prevent duplicates
+        await this.db.delete(campaignExternalData).where(eq(campaignExternalData.campaignId, campaignId));
+
+        if (rows.length === 0) return;
+
+        // 2. Prepare normalized records
+        const records = rows.map(row => {
+            const { identifier, ...data } = row;
+            if (!identifier) return null;
+
+            return {
+                campaignId,
+                identifier: normalizeIdentifier(String(identifier)),
+                data: data // The rest of the columns become the dynamic placeholders
+            };
+        }).filter(r => r !== null) as any[];
+
+        // 3. Batch insert (for performance)
+        if (records.length > 0) {
+            await this.db.insert(campaignExternalData).values(records);
+        }
     }
 }

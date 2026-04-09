@@ -1,7 +1,8 @@
 import { eq, and, sql, inArray } from 'drizzle-orm';
 import { db } from '../../db';
-import { bulkCustomers, campaignAnalytics, campaigns, groupMembers } from '../../db/schema';
+import { bulkCustomers, campaignAnalytics, campaigns, groupMembers, campaignExternalData } from '../../db/schema';
 import { addCampaignJob } from '../queue/queue.service';
+import { normalizeIdentifier } from '../../utils/phone-utils';
 
 export class CampaignsEngine {
     constructor(private dbClient: typeof db) { }
@@ -242,6 +243,14 @@ export class CampaignsEngine {
     private async dispatchToContacts(campaign: any, contacts: any[]) {
         const content = campaign.content as any;
         let successCount = 0;
+
+        // Fetch External Contextual Data for this campaign
+        const externalDataRecords = await this.dbClient.query.campaignExternalData.findMany({
+            where: eq(campaignExternalData.campaignId, campaign.id)
+        });
+        const externalDataMap = new Map<string, any>();
+        externalDataRecords.forEach(r => externalDataMap.set(r.identifier, r.data));
+
         const msPerHour = 3600000;
         const msDelayPerMsg = campaign.throttleRate && campaign.throttleRate > 0
             ? Math.floor(msPerHour / campaign.throttleRate)
@@ -251,9 +260,14 @@ export class CampaignsEngine {
 
         for (const contact of contacts) {
             try {
-                const body = this.injectVariables(content.body, contact);
-                const subject = content.subject ? this.injectVariables(content.subject, contact) : "Mass Message";
-                const preheader = content.preheader ? this.injectVariables(content.preheader, contact) : "";
+                // Merge external data if exists
+                const contactKeyPhone = normalizeIdentifier(contact.mobilePhone);
+                const contactKeyEmail = normalizeIdentifier(contact.email);
+                const contextualData = externalDataMap.get(contactKeyPhone) || externalDataMap.get(contactKeyEmail) || {};
+
+                const body = this.injectVariables(content.body, contact, contextualData);
+                const subject = content.subject ? this.injectVariables(content.subject, contact, contextualData) : "Mass Message";
+                const preheader = content.preheader ? this.injectVariables(content.preheader, contact, contextualData) : "";
 
                 const jobId = `camp_${campaign.id}_${contact.id}_${Date.now()}`;
 
@@ -291,13 +305,21 @@ export class CampaignsEngine {
         return { queuedCount: successCount };
     }
 
-    private injectVariables(template: string, contact: any) {
+    private injectVariables(template: string, contact: any, contextualData: any = {}) {
         if (!template) return "";
-        return template
+        let result = template
             .replace(/{{firstName}}/g, contact.firstName || "Customer")
             .replace(/{{surname}}/g, contact.surname || "")
             .replace(/{{fullName}}/g, contact.fullName || "Customer")
             .replace(/{{email}}/g, contact.email || "")
             .replace(/{{mobilePhone}}/g, contact.mobilePhone || "");
+
+        // Inject Dynamic Contextual Data from CSV
+        Object.keys(contextualData).forEach(key => {
+            const regex = new RegExp(`{{${key}}}`, 'g');
+            result = result.replace(regex, contextualData[key] || "");
+        });
+
+        return result;
     }
 }

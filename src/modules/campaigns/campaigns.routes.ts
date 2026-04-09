@@ -51,4 +51,7 @@ export async function campaignsRoutes(app: FastifyInstance) {
 
     // Retry failed messages
     app.post('/:workspaceId/:id/retry', (request: any, reply) => campaignsController.retryCampaign(request, reply));
+
+    // Upload campaign-specific contextual data (for manual variables)
+    app.post('/:workspaceId/:id/external-data', (request: any, reply) => campaignsController.uploadExternalData(request, reply));
 }

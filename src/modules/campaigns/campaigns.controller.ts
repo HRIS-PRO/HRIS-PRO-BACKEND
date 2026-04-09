@@ -185,4 +185,19 @@ export class CampaignsController {
             return reply.code(error.message.includes('Unauthorized') ? 403 : 400).send({ message: error.message });
         }
     }
+
+    async uploadExternalData(
+        request: FastifyRequest<{ Params: { workspaceId: string, id: string }, Body: { rows: any[] } }>,
+        reply: FastifyReply
+    ) {
+        const { workspaceId, id } = request.params;
+        const { rows } = request.body;
+        try {
+            this.checkRole(request, ['Admin', 'Manager', 'Editor']);
+            await this.campaignsService.processExternalData(id, rows);
+            return reply.send({ success: true, message: 'External contextual data processed successfully' });
+        } catch (error: any) {
+            return reply.code(error.message.includes('Unauthorized') ? 403 : 400).send({ message: error.message });
+        }
+    }
 }

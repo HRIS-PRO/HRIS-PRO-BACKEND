@@ -550,3 +550,22 @@ export const assetActivities = pgTable("ASSET_ACTIVITY", {
     isRead: boolean("isRead").default(false),
     createdAt: timestamp("createdAt").defaultNow().notNull()
 });
+
+// -----------------------------------------------------------------------------
+// Campaign External Contextual Data
+// -----------------------------------------------------------------------------
+
+export const campaignExternalData = pgTable("CAMPAIGN_EXTERNAL_DATA", {
+    id: uuid("id").primaryKey().defaultRandom(),
+    campaignId: uuid("campaignId").notNull().references(() => campaigns.id, { onDelete: 'cascade' }),
+    identifier: text("identifier").notNull(), // Normalized Phone or Email
+    data: jsonb("data").notNull(),            // { "Balance": "5000", "Days": "5" }
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export const campaignExternalDataRelations = relations(campaignExternalData, ({ one }) => ({
+    campaign: one(campaigns, {
+        fields: [campaignExternalData.campaignId],
+        references: [campaigns.id],
+    }),
+}));
