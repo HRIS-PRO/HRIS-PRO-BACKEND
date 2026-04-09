@@ -48,4 +48,7 @@ export async function campaignsRoutes(app: FastifyInstance) {
 
     // Delete campaign
     app.delete('/:workspaceId/:id', (request: any, reply) => campaignsController.deleteCampaign(request, reply));
+
+    // Retry failed messages
+    app.post('/:workspaceId/:id/retry', (request: any, reply) => campaignsController.retryCampaign(request, reply));
 }

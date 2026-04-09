@@ -126,14 +126,16 @@ export class CampaignsEngine {
         await this.dispatchToContacts(campaign, pendingContacts);
     }
 
-    async executeCampaign(campaignId: string) {
+    async executeCampaign(campaignId: string, targetCustomerIds?: string[]) {
         const campaign = await this.dbClient.query.campaigns.findFirst({
             where: eq(campaigns.id, campaignId),
             with: { recipients: { with: { group: { with: { rules: true } } } } }
         });
 
         if (!campaign) throw new Error("Campaign not found");
-        if (campaign.status !== 'APPROVED' && campaign.status !== 'SENDING') {
+        
+        // Allowed statuses for execution: APPROVED (initial), SENDING (ongoing), COMPLETED (retry)
+        if (campaign.status !== 'APPROVED' && campaign.status !== 'SENDING' && campaign.status !== 'COMPLETED') {
             throw new Error(`Campaign cannot be executed in current status: ${campaign.status}`);
         }
 
@@ -142,7 +144,12 @@ export class CampaignsEngine {
             .where(eq(campaigns.id, campaignId));
 
         try {
-            const contacts = await this.resolveCampaignContacts(campaign);
+            const contacts = targetCustomerIds && targetCustomerIds.length > 0
+                ? await this.dbClient.query.bulkCustomers.findMany({
+                    where: inArray(bulkCustomers.id, targetCustomerIds)
+                })
+                : await this.resolveCampaignContacts(campaign);
+
             if (contacts.length === 0) {
                 await this.dbClient.update(campaigns)
                     .set({ status: 'COMPLETED', updatedAt: new Date() })

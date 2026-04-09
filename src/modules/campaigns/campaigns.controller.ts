@@ -171,4 +171,18 @@ export class CampaignsController {
             return reply.code(error.message.includes('Unauthorized') ? 403 : 400).send({ message: error.message });
         }
     }
+
+    async retryCampaign(
+        request: FastifyRequest<{ Params: { workspaceId: string, id: string } }>,
+        reply: FastifyReply
+    ) {
+        const { workspaceId, id } = request.params;
+        try {
+            this.checkRole(request, ['Admin', 'Manager', 'Editor']);
+            const result = await this.campaignsService.retryCampaign(id, workspaceId);
+            return reply.send(result);
+        } catch (error: any) {
+            return reply.code(error.message.includes('Unauthorized') ? 403 : 400).send({ message: error.message });
+        }
+    }
 }

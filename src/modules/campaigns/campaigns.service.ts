@@ -24,8 +24,12 @@ export class CampaignsService {
             where: eq(campaigns.workspaceId, workspaceId),
             orderBy: (campaigns, { desc }) => [desc(campaigns.createdAt)],
             with: {
-                creator: true,
-                approver: true,
+                creator: {
+                    with: { employee: true }
+                },
+                approver: {
+                    with: { employee: true }
+                },
                 recipients: {
                     with: {
                         group: {
@@ -90,9 +94,38 @@ export class CampaignsService {
                 totalReach += count;
             }
 
+            // Fetch Analytics Stats - Unique counts only (if sent, they aren't 'failed' anymore)
+            const sentRes = await this.db.select({ count: sql<number>`count(DISTINCT ${campaignAnalytics.contactId})` })
+                .from(campaignAnalytics)
+                .where(and(
+                    eq(campaignAnalytics.campaignId, c.id),
+                    eq(campaignAnalytics.eventType, 'SENT')
+                ));
+            
+            const sentCountValue = Number(sentRes[0]?.count || 0);
+
+            const failedRes = await this.db.select({ count: sql<number>`count(DISTINCT ${campaignAnalytics.contactId})` })
+                .from(campaignAnalytics)
+                .where(and(
+                    eq(campaignAnalytics.campaignId, c.id),
+                    sql`${campaignAnalytics.eventType} IN ('FAILED', 'BOUNCED')`,
+                    // Only count as failed if there is NO successful 'SENT' event for this contact in this campaign
+                    sql`NOT EXISTS (
+                        SELECT 1 FROM "CAMPAIGN_ANALYTICS" sub 
+                        WHERE sub."campaignId" = ${c.id} 
+                        AND sub."contactId" = ${campaignAnalytics.contactId} 
+                        AND sub."eventType" = 'SENT'
+                    )`
+                ));
+
             return {
                 ...c,
-                targetCount: totalReach
+                targetCount: totalReach,
+                sentCount: sentCountValue,
+                failedCount: Number(failedRes[0]?.count || 0),
+                creatorName: (c.creator as any)?.employee?.firstName 
+                    ? `${(c.creator as any).employee.firstName} ${(c.creator as any).employee.surname}`
+                    : (c.creator?.email || 'System')
             };
         }));
 
@@ -394,5 +427,25 @@ export class CampaignsService {
             .where(eq(campaigns.id, id))
             .returning();
         return deleted;
+    }
+
+    async retryCampaign(id: string, workspaceId: string) {
+        // 1. Identify all failed/bounced contacts for this campaign
+        const failedRecipients = await this.db.select({ contactId: campaignAnalytics.contactId })
+            .from(campaignAnalytics)
+            .where(and(
+                eq(campaignAnalytics.campaignId, id),
+                sql`${campaignAnalytics.eventType} IN ('FAILED', 'BOUNCED')`
+            ));
+
+        const uniqueFailedIds = [...new Set(failedRecipients.map(r => r.contactId).filter((id): id is string => !!id))];
+
+        if (uniqueFailedIds.length === 0) {
+            throw new Error("No failed or bounced recipients found to retry.");
+        }
+
+        // 2. Trigger the engine specifically for these IDs
+        const engine = new CampaignsEngine(this.db as any);
+        return await engine.executeCampaign(id, uniqueFailedIds);
     }
 }
