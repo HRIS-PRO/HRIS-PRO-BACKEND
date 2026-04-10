@@ -354,8 +354,19 @@ export class CampaignsEngine {
             const regex = new RegExp(`{{${key}}}`, 'g');
             let value = contextualData[key] || "";
             
+            const lowerKey = key.toLowerCase();
+            const isIdentifier = lowerKey.includes('account') || 
+                                 lowerKey.includes('number') || 
+                                 lowerKey.includes('id') || 
+                                 lowerKey.includes('bvn') || 
+                                 lowerKey.includes('nin') ||
+                                 lowerKey.includes('phone') ||
+                                 lowerKey.includes('mobile') ||
+                                 lowerKey.includes('code');
+
             // Auto-format numbers with commas (e.g. 2500 -> 2,500)
-            if (typeof value === 'number' || (!isNaN(Number(value)) && value.toString().length > 3 && !value.toString().includes('-'))) {
+            // Skip formatting for identifiers like account numbers, BVNs, etc.
+            if (!isIdentifier && (typeof value === 'number' || (!isNaN(Number(value)) && value.toString().length > 3 && !value.toString().includes('-')))) {
                 const num = Number(value);
                 value = num.toLocaleString('en-US');
             }
