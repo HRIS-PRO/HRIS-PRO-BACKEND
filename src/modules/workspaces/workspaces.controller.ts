@@ -332,6 +332,19 @@ export class WorkspacesController {
         }
     }
 
+    async getAnniversaries(
+        request: FastifyRequest<{ Params: { id: string } }>,
+        reply: FastifyReply
+    ) {
+        const workspaceId = request.params.id;
+        try {
+            const result = await this.workspacesService.getWorkspaceAnniversaries(workspaceId);
+            return reply.send(result);
+        } catch (error: any) {
+            return reply.code(500).send({ message: error.message || 'Failed to fetch anniversaries' });
+        }
+    }
+
     async clearAllBulkCustomers(
         request: FastifyRequest,
         reply: FastifyReply

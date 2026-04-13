@@ -134,4 +134,9 @@ export default async function workspacesRoutes(app: FastifyInstance) {
         '/:workspaceId/dashboard-stats',
         workspacesController.getDashboardStats.bind(workspacesController)
     );
+
+    app.get(
+        '/:id/anniversaries',
+        workspacesController.getAnniversaries.bind(workspacesController)
+    );
 }

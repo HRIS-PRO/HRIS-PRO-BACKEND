@@ -916,6 +916,100 @@ export class WorkspacesService {
         };
     }
 
+    async getWorkspaceAnniversaries(workspaceId: string) {
+        // Since getBulkCustomers returns all customers in the database (global pool),
+        // we follow the same pattern here to ensure all contacts are scanned for anniversaries.
+        const customers = await this.db.select({
+            id: bulkCustomers.id,
+            firstName: bulkCustomers.firstName,
+            surname: bulkCustomers.surname,
+            fullName: bulkCustomers.fullName,
+            dob: bulkCustomers.dob,
+            dateOfIncorporation: bulkCustomers.dateOfIncorporation,
+            mobilePhone: bulkCustomers.mobilePhone,
+            email: bulkCustomers.email
+        }).from(bulkCustomers);
+
+        console.log(`[Anniversaries] Found ${customers.length} total customers to scan.`);
+        
+        const today = new Date();
+        // Zero out time for accurate day difference
+        today.setHours(0, 0, 0, 0);
+
+        const results = {
+            inThreeDays: [] as any[],
+            upcoming: [] as any[]
+        };
+
+        for (const customer of customers) {
+            const anniversaries = [
+                { type: 'Birthday', dateStr: customer.dob },
+                { type: 'Anniversary', dateStr: customer.dateOfIncorporation }
+            ];
+
+            for (const ann of anniversaries) {
+                if (!ann.dateStr) continue;
+
+                console.log(`[Anniversaries] Checking ${ann.type} for ${customer.fullName || customer.id}: ${ann.dateStr}`);
+
+                // Simple parser for YYYY-MM-DD or DD-MM-YYYY
+                let dateParts: string[] = [];
+                if (ann.dateStr.includes('-')) dateParts = ann.dateStr.split('-');
+                else if (ann.dateStr.includes('/')) dateParts = ann.dateStr.split('/');
+                
+                if (dateParts.length < 2) continue;
+
+                let day, month;
+                // Try to guess format
+                if (dateParts[0].length === 4) { // YYYY-MM-DD
+                    month = parseInt(dateParts[1]);
+                    day = parseInt(dateParts[2]);
+                } else if (dateParts[2]?.length === 4) { // DD-MM-YYYY
+                    day = parseInt(dateParts[0]);
+                    month = parseInt(dateParts[1]);
+                } else {
+                    // Fallback
+                    day = parseInt(dateParts[0]);
+                    month = parseInt(dateParts[1]);
+                }
+
+                if (isNaN(day) || isNaN(month)) continue;
+                if (month < 1 || month > 12 || day < 1 || day > 31) continue;
+
+                const eventThisYear = new Date(today.getFullYear(), month - 1, day);
+                eventThisYear.setHours(0, 0, 0, 0);
+
+                let diffTime = eventThisYear.getTime() - today.getTime();
+                let diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+                // If event already passed this year, check next year
+                if (diffDays < 0) {
+                    const eventNextYear = new Date(today.getFullYear() + 1, month - 1, day);
+                    eventNextYear.setHours(0, 0, 0, 0);
+                    diffTime = eventNextYear.getTime() - today.getTime();
+                    diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                }
+
+                const item = {
+                    id: customer.id,
+                    name: customer.fullName || `${customer.firstName} ${customer.surname}`.trim() || customer.email || 'Unknown Contact',
+                    type: ann.type,
+                    daysUntil: diffDays,
+                    date: `${day}/${month}`,
+                    originalDate: ann.dateStr
+                };
+
+                if (diffDays === 3) {
+                    results.inThreeDays.push(item);
+                } else if (diffDays >= 0 && diffDays <= 7) {
+                    results.upcoming.push(item);
+                }
+            }
+        }
+
+        return results;
+    }
+
     async clearAllBulkCustomers() {
         const result = await this.db.delete(bulkCustomers).returning({ id: bulkCustomers.id });
         return { deleted: result.length };
