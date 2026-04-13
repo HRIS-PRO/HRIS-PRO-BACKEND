@@ -337,9 +337,9 @@ export class WorkspacesService {
             };
         });
 
-        const phones = mappedCustomers.map(c => c.mobilePhone).filter(Boolean);
-        const emails = mappedCustomers.map(c => c.email).filter(Boolean);
-        const externalIds = mappedCustomers.map(c => c.customerExternalId).filter(Boolean);
+        const phones = mappedCustomers.map(c => String(c.mobilePhone || '')).filter(Boolean);
+        const emails = mappedCustomers.map(c => String(c.email || '')).filter(Boolean);
+        const externalIds = mappedCustomers.map(c => String(c.customerExternalId || '')).filter(Boolean);
 
         const conditions = [];
         if (phones.length > 0) conditions.push(inArray(bulkCustomers.mobilePhone, phones));

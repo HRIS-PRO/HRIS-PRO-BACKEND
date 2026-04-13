@@ -6,7 +6,7 @@ export function normalizePhoneNumber(phone: string | null | undefined): string {
     if (!phone) return "";
 
     // 1. Remove all non-numeric characters
-    let cleaned = phone.replace(/\D/g, '');
+    let cleaned = String(phone).replace(/\D/g, '');
 
     // 2. Handle Nigerian numbers (+234, 0..., 8...)
     if (cleaned.startsWith('234')) {
