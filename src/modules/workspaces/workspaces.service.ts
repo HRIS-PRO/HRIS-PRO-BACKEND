@@ -269,7 +269,7 @@ export class WorkspacesService {
                                 </div>
                                 <p style="font-size:14px;color:#555">Log in and select <strong style="color:#667eea">${workspace.title}</strong> from your workspace list to get started.</p>
                                 <div style="text-align:center;margin-top:32px">
-                                    <a href="#" style="display:inline-block;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;padding:14px 36px;border-radius:50px;text-decoration:none;font-weight:900;font-size:14px">Open MsgScale →</a>
+                                    <a href="https://msg.noltfinance.com" style="display:inline-block;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;padding:14px 36px;border-radius:50px;text-decoration:none;font-weight:900;font-size:14px">Open MsgScale →</a>
                                 </div>
                             </div>
                         </div>
