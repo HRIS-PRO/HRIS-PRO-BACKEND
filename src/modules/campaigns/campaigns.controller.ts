@@ -200,4 +200,19 @@ export class CampaignsController {
             return reply.code(error.message.includes('Unauthorized') ? 403 : 400).send({ message: error.message });
         }
     }
+
+    async previewContextMatch(
+        request: FastifyRequest<{ Params: { workspaceId: string }, Body: { groupIds: string[], externalData: { identifier: string }[] } }>,
+        reply: FastifyReply
+    ) {
+        const { workspaceId } = request.params;
+        const { groupIds, externalData } = request.body;
+        try {
+            this.checkRole(request, ['Admin', 'Manager', 'Editor', 'User']);
+            const result = await this.campaignsService.previewContextMatch(workspaceId, groupIds, externalData);
+            return reply.send(result);
+        } catch (error: any) {
+            return reply.code(error.message.includes('Unauthorized') ? 403 : 500).send({ message: error.message });
+        }
+    }
 }

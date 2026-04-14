@@ -288,7 +288,7 @@ export class WorkspacesService {
         if (!customersData || customersData.length === 0) return { added: 0, skipped: 0 };
 
         const mappedCustomers = customersData.map(data => {
-            const customerType = data.customerType || data['Customer Type'] || (data['Registration No'] ? 'Corporate' : 'Retail');
+            const customerType = data.customerType || data['Customer Type'] || (data['Registration No'] ? 'Corporate' : 'Individual');
             const mobilePhone = normalizePhoneNumber(data.mobilePhone || data['Mobile Phone'] || data['Phone No'] || '');
             
             return {
@@ -403,6 +403,8 @@ export class WorkspacesService {
         const cleanSearch = search ? search.trim().replace(/\s+/g, ' ') : '';
         const searchPattern = cleanSearch ? `%${cleanSearch}%` : null;
         
+        const normalizedSearch = normalizeIdentifier(cleanSearch);
+
         const baseQueryConditions = searchPattern 
             ? or(
                 ilike(bulkCustomers.firstName, searchPattern),
@@ -412,6 +414,7 @@ export class WorkspacesService {
                 sql`CONCAT(${bulkCustomers.surname}, ' ', ${bulkCustomers.firstName}) ILIKE ${searchPattern}`,
                 ilike(bulkCustomers.email, searchPattern),
                 ilike(bulkCustomers.mobilePhone, searchPattern),
+                normalizedSearch ? eq(bulkCustomers.mobilePhone, normalizedSearch) : undefined,
                 ilike(bulkCustomers.otherName, searchPattern),
                 ilike(bulkCustomers.customerType, searchPattern),
                 ilike(bulkCustomers.occupation, searchPattern)
@@ -508,25 +511,37 @@ export class WorkspacesService {
                 const contextualInserts: any[] = [];
 
                 if (data.contextualData && data.contextualData.length > 0) {
-                    const identifiers = data.contextualData.map(d => d.identifier);
+                    const originalIdentifiers = data.contextualData.map(d => d.identifier);
+                    const normalizedIdentifiers = originalIdentifiers.map(id => normalizeIdentifier(id));
                     
                     // Lookup customers by identifier (email or phone)
                     const matchedCustomers = await tx.query.bulkCustomers.findMany({
                         where: or(
-                            inArray(bulkCustomers.email, identifiers),
-                            inArray(bulkCustomers.mobilePhone, identifiers)
+                            inArray(bulkCustomers.email, originalIdentifiers),
+                            inArray(bulkCustomers.mobilePhone, originalIdentifiers),
+                            inArray(bulkCustomers.email, normalizedIdentifiers),
+                            inArray(bulkCustomers.mobilePhone, normalizedIdentifiers)
                         )
                     });
 
-                    // Create a lookup map for efficiency
-                    const customerMap = new Map<string, string>(); // identifier -> customerId
+                    // Create a lookup map for efficiency. 
+                    // Map both the exact value in DB AND its normalized version (though they should be same).
+                    const customerMap = new Map<string, string>(); // normalizedIdentifier -> customerId
                     matchedCustomers.forEach(c => {
-                        if (c.email) customerMap.set(c.email, c.id);
-                        if (c.mobilePhone) customerMap.set(c.mobilePhone, c.id);
+                        if (c.email) {
+                            customerMap.set(c.email.toLowerCase(), c.id);
+                            customerMap.set(normalizeIdentifier(c.email), c.id);
+                        }
+                        if (c.mobilePhone) {
+                            customerMap.set(c.mobilePhone, c.id);
+                            customerMap.set(normalizeIdentifier(c.mobilePhone), c.id);
+                        }
                     });
 
                     for (const row of data.contextualData) {
-                        const customerId = customerMap.get(row.identifier);
+                        const normId = normalizeIdentifier(row.identifier);
+                        const customerId = customerMap.get(normId) || customerMap.get(row.identifier.toLowerCase().trim());
+                        
                         if (customerId) {
                             finalCustomerIds.add(customerId);
                             contextualInserts.push({
@@ -611,6 +626,15 @@ export class WorkspacesService {
                             case 'not_equals': condition = sql`${column} != ${r.value}`; break;
                             case 'contains': condition = sql`${column} ILIKE ${'%' + r.value + '%'}`; break;
                             case 'starts_with': condition = sql`${column} ILIKE ${r.value + '%'}`; break;
+                        }
+                    } else {
+                        // Support for Custom Fields (JSONB)
+                        const jsonColumn = sql`${bulkCustomers.customFields}->>${r.field}`;
+                        switch (r.operator) {
+                            case 'equals': condition = sql`${jsonColumn} = ${r.value}`; break;
+                            case 'not_equals': condition = sql`${jsonColumn} != ${r.value}`; break;
+                            case 'contains': condition = sql`${jsonColumn} ILIKE ${'%' + r.value + '%'}`; break;
+                            case 'starts_with': condition = sql`${jsonColumn} ILIKE ${r.value + '%'}`; break;
                         }
                     }
 

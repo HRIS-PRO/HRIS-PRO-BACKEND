@@ -1,6 +1,6 @@
 import { eq, and, sql, inArray } from 'drizzle-orm';
 import { db } from '../../db';
-import { bulkCustomers, campaignAnalytics, campaigns, groupMembers, campaignExternalData, groupContextualData, campaignRecipients } from '../../db/schema';
+import { bulkCustomers, campaignAnalytics, campaigns, groupMembers, campaignExternalData, groupContextualData, campaignRecipients, groups } from '../../db/schema';
 import { addCampaignJob } from '../queue/queue.service';
 import { normalizeIdentifier } from '../../utils/phone-utils';
 
@@ -174,6 +174,74 @@ export class CampaignsEngine {
         }
     }
 
+    public async resolveGroupContacts(groupId: string) {
+        const group = await this.dbClient.query.groups.findFirst({
+            where: eq(groups.id, groupId),
+            with: { rules: true }
+        });
+        if (!group) return [];
+        return await this.resolveSingleGroupContacts(group);
+    }
+
+    private async resolveSingleGroupContacts(group: any) {
+        let groupContactIds: string[] = [];
+
+        if (group.type === 'static') {
+            const members = await this.dbClient.query.groupMembers.findMany({
+                where: eq(groupMembers.groupId, group.id)
+            });
+            groupContactIds = members.map(m => m.customerId);
+        } else if (group.type === 'dynamic' && (group as any).rules?.length > 0) {
+            const rulesArr: any[] = (group as any).rules;
+            let querySql = sql`1=1`;
+            
+            for (let i = 0; i < rulesArr.length; i++) {
+                const r = rulesArr[i];
+                const column = (bulkCustomers as any)[r.field];
+                let condition = sql`1=1`;
+                
+                if (column) {
+                    switch (r.operator) {
+                        case 'equals': condition = sql`${column} = ${r.value}`; break;
+                        case 'not_equals': condition = sql`${column} != ${r.value}`; break;
+                        case 'contains': condition = sql`${column} ILIKE ${'%' + r.value + '%'}`; break;
+                        case 'starts_with': condition = sql`${column} ILIKE ${r.value + '%'}`; break;
+                    }
+                } else {
+                    // Support for Custom Fields (JSONB)
+                    const jsonColumn = sql`${bulkCustomers.customFields}->>${r.field}`;
+                    switch (r.operator) {
+                        case 'equals': condition = sql`${jsonColumn} = ${r.value}`; break;
+                        case 'not_equals': condition = sql`${jsonColumn} != ${r.value}`; break;
+                        case 'contains': condition = sql`${jsonColumn} ILIKE ${'%' + r.value + '%'}`; break;
+                        case 'starts_with': condition = sql`${jsonColumn} ILIKE ${r.value + '%'}`; break;
+                    }
+                }
+
+                if (i === 0) {
+                    querySql = condition;
+                } else {
+                    if (r.logicGate === 'OR') {
+                        querySql = sql`${querySql} OR ${condition}`;
+                    } else {
+                        querySql = sql`${querySql} AND ${condition}`;
+                    }
+                }
+            }
+
+            const members = await this.dbClient.query.bulkCustomers.findMany({
+                where: sql`(${querySql})`
+            });
+            groupContactIds = members.map(m => m.id);
+        }
+
+        if (groupContactIds.length === 0) return [];
+
+        return await this.dbClient.query.bulkCustomers.findMany({
+            where: inArray(bulkCustomers.id, groupContactIds)
+        });
+    }
+
     private async resolveCampaignContacts(campaign: any) {
         const contactIds = new Set<string>();
         const excludedContactIds = new Set<string>();
@@ -183,47 +251,8 @@ export class CampaignsEngine {
             const group = recipientEntry.group;
             if (!group) continue;
 
-            let groupContactIds: string[] = [];
-
-            if (group.type === 'static') {
-                const members = await this.dbClient.query.groupMembers.findMany({
-                    where: eq(groupMembers.groupId, group.id)
-                });
-                groupContactIds = members.map(m => m.customerId);
-            } else if (group.type === 'dynamic' && (group as any).rules?.length > 0) {
-                const rulesArr: any[] = (group as any).rules;
-                let querySql = sql`1=1`;
-                
-                for (let i = 0; i < rulesArr.length; i++) {
-                    const r = rulesArr[i];
-                    const column = (bulkCustomers as any)[r.field];
-                    let condition = sql`1=1`;
-                    
-                    if (column) {
-                        switch (r.operator) {
-                            case 'equals': condition = sql`${column} = ${r.value}`; break;
-                            case 'not_equals': condition = sql`${column} != ${r.value}`; break;
-                            case 'contains': condition = sql`${column} ILIKE ${'%' + r.value + '%'}`; break;
-                            case 'starts_with': condition = sql`${column} ILIKE ${r.value + '%'}`; break;
-                        }
-                    }
-
-                    if (i === 0) {
-                        querySql = condition;
-                    } else {
-                        if (r.logicGate === 'OR') {
-                            querySql = sql`${querySql} OR ${condition}`;
-                        } else {
-                            querySql = sql`${querySql} AND ${condition}`;
-                        }
-                    }
-                }
-
-                const members = await this.dbClient.query.bulkCustomers.findMany({
-                    where: sql`(${querySql})`
-                });
-                groupContactIds = members.map(m => m.id);
-            }
+            const groupContacts = await this.resolveSingleGroupContacts(group);
+            const groupContactIds = groupContacts.map(c => c.id);
 
             if (isExcluded) {
                 groupContactIds.forEach(id => excludedContactIds.add(id));
@@ -347,7 +376,7 @@ export class CampaignsEngine {
             .replace(/{{surname}}/g, contact.surname || "")
             .replace(/{{fullName}}/g, contact.fullName || "Customer")
             .replace(/{{email}}/g, contact.email || "")
-            .replace(/{{mobilePhone}}/g, contact.mobilePhone || "");
+            .replace(/{{mobilePhone}}/g, (contact.mobilePhone && contact.mobilePhone.startsWith('234') ? '+' : '') + (contact.mobilePhone || ""));
 
         // Inject Dynamic Contextual Data from CSV
         Object.keys(contextualData).forEach(key => {

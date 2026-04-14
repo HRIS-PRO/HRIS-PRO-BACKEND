@@ -54,4 +54,7 @@ export async function campaignsRoutes(app: FastifyInstance) {
 
     // Upload campaign-specific contextual data (for manual variables)
     app.post('/:workspaceId/:id/external-data', (request: any, reply) => campaignsController.uploadExternalData(request, reply));
+
+    // Preview match between groups and external data
+    app.post('/:workspaceId/preview-context-match', (request: any, reply) => campaignsController.previewContextMatch(request, reply));
 }

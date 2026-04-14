@@ -74,6 +74,15 @@ export class CampaignsService {
                                 case 'contains': condition = sql`${column} ILIKE ${'%' + r.value + '%'}`; break;
                                 case 'starts_with': condition = sql`${column} ILIKE ${r.value + '%'}`; break;
                             }
+                        } else {
+                            // Support for Custom Fields (JSONB)
+                            const jsonColumn = sql`${bulkCustomers.customFields}->>${r.field}`;
+                            switch (r.operator) {
+                                case 'equals': condition = sql`${jsonColumn} = ${r.value}`; break;
+                                case 'not_equals': condition = sql`${jsonColumn} != ${r.value}`; break;
+                                case 'contains': condition = sql`${jsonColumn} ILIKE ${'%' + r.value + '%'}`; break;
+                                case 'starts_with': condition = sql`${jsonColumn} ILIKE ${r.value + '%'}`; break;
+                            }
                         }
 
                         if (i === 0) {
@@ -230,12 +239,15 @@ export class CampaignsService {
 
         // Skip flow for Admin or Manager
         if (actorRole === 'Admin' || actorRole === 'Manager') {
+            const isRecurring = existing.cycleConfig || existing.anniversaryConfig;
+            const status = existing.scheduledAt && new Date(existing.scheduledAt) > new Date() ? 'SCHEDULED' : 'APPROVED';
+
             const [updated] = await this.db.update(campaigns)
-                .set({ status: existing.scheduledAt && new Date(existing.scheduledAt) > new Date() ? 'SCHEDULED' : 'APPROVED' })
+                .set({ status })
                 .where(eq(campaigns.id, id))
                 .returning();
             
-            if (updated.status === 'APPROVED') {
+            if (updated.status === 'APPROVED' && !isRecurring) {
                 const engine = new CampaignsEngine(this.db as any);
                 engine.executeCampaign(updated.id).catch(console.error);
             }
@@ -388,6 +400,7 @@ export class CampaignsService {
             }
 
             // Final Approval or Reject
+            const isRecurring = existing.cycleConfig || existing.anniversaryConfig;
             const status = action === 'APPROVE' 
                 ? (existing.scheduledAt && new Date(existing.scheduledAt) > new Date() ? 'SCHEDULED' : 'APPROVED') 
                 : 'REJECTED';
@@ -401,7 +414,7 @@ export class CampaignsService {
                 .where(eq(campaigns.id, id))
                 .returning();
 
-            if (updated && updated.status === 'APPROVED') {
+            if (updated && updated.status === 'APPROVED' && !isRecurring) {
                 const engine = new CampaignsEngine(this.db as any);
                 engine.executeCampaign(updated.id).catch(err => {
                     console.error(`Automatic campaign execution failed for ${updated.id}:`, err);
@@ -472,5 +485,43 @@ export class CampaignsService {
         if (records.length > 0) {
             await this.db.insert(campaignExternalData).values(records);
         }
+    }
+
+    async previewContextMatch(workspaceId: string, groupIds: string[], externalData: { identifier: string }[]) {
+        if (!groupIds.length || !externalData.length) {
+            return { matchedCount: 0, unmatchedCount: externalData.length, totalExternal: externalData.length, unmatchedSamples: [] };
+        }
+
+        // 1. Resolve all identifiers in the selected groups
+        // We fetch mobilePhone and email since either could be an identifier
+        const engine = new CampaignsEngine(this.db as any);
+        const contactIdentifiers = new Set<string>();
+
+        for (const groupId of groupIds) {
+            const contacts = await engine.resolveGroupContacts(groupId);
+            contacts.forEach(c => {
+                if (c.mobilePhone) contactIdentifiers.add(normalizeIdentifier(c.mobilePhone));
+                if (c.email) contactIdentifiers.add(normalizeIdentifier(c.email));
+            });
+        }
+
+        // 2. Compare with external data
+        let matchedCount = 0;
+        const unmatchedSamples: string[] = [];
+
+        externalData.forEach(item => {
+            const normalized = normalizeIdentifier(String(item.identifier));
+            if (contactIdentifiers.has(normalized)) {
+                matchedCount++;
+            } else {
+                if (unmatchedSamples.length < 5) unmatchedSamples.push(item.identifier);
+            }
+        });
+
+        return {
+            matched: matchedCount,
+            unmatched: externalData.length - matchedCount,
+            unmatchedIdentifiers: unmatchedSamples
+        };
     }
 }
