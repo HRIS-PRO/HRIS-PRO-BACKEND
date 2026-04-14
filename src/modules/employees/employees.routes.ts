@@ -8,7 +8,7 @@ export default async function employeesRoutes(app: FastifyInstance) {
     const employeesService = new EmployeesService(app.db);
     const employeesController = new EmployeesController(employeesService);
 
-    app.addHook('onRequest', app.authenticate);
+    app.addHook('onRequest', app.checkAppRole('HRIS'));
 
     app.get(
         '/',
@@ -38,5 +38,10 @@ export default async function employeesRoutes(app: FastifyInstance) {
             },
         },
         employeesController.assignEmployeeRole.bind(employeesController)
+    );
+
+    app.delete(
+        '/:id/roles/:app',
+        employeesController.revokeEmployeeRole.bind(employeesController)
     );
 }

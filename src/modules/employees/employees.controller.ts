@@ -62,4 +62,21 @@ export class EmployeesController {
             return reply.code(500).send({ message: 'Error assigning role' });
         }
     }
+
+    async revokeEmployeeRole(
+        request: FastifyRequest<{ Params: { id: string, app: string } }>,
+        reply: FastifyReply
+    ) {
+        try {
+            const { id, app } = request.params;
+            const result = await this.employeesService.revokeEmployeeRole(id, app);
+            return reply.send(result);
+        } catch (error: any) {
+            request.log.error(error);
+            if (error.message === 'User not found for this employee') {
+                return reply.code(404).send({ message: error.message });
+            }
+            return reply.code(500).send({ message: 'Error revoking role' });
+        }
+    }
 }

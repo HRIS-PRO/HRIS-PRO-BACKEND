@@ -87,13 +87,13 @@ export class AssetsController {
         }
     }
 
-    async assignAsset(request: FastifyRequest<{ Params: { id: string }, Body: { assignedTo: string; manager: string; department: string } }>, reply: FastifyReply) {
+    async assignAsset(request: FastifyRequest<{ Params: { id: string }, Body: { assignedTo: string; manager: string; department: string; location: string } }>, reply: FastifyReply) {
         try {
             const { id } = request.params;
             const data = request.body;
 
-            if (!data.assignedTo || !data.manager || !data.department) {
-                return reply.status(400).send({ message: 'assignedTo, manager, and department are tightly required for assignment' });
+            if (!data.assignedTo || !data.manager || !data.department || !data.location) {
+                return reply.status(400).send({ message: 'assignedTo, manager, department, and location are required for assignment' });
             }
 
             const updatedAsset = await this.assetsService.assignAsset(id, data);
@@ -104,7 +104,7 @@ export class AssetsController {
         }
     }
 
-    async bulkAssignAssets(request: FastifyRequest<{ Body: { assetIds: string[], data: { assignedTo: string; manager: string; department: string } } }>, reply: FastifyReply) {
+    async bulkAssignAssets(request: FastifyRequest<{ Body: { assetIds: string[], data: { assignedTo: string; manager: string; department: string; location: string } } }>, reply: FastifyReply) {
         try {
             const { assetIds, data } = request.body;
 
@@ -112,8 +112,8 @@ export class AssetsController {
                 return reply.status(400).send({ message: 'assetIds must be a non-empty array of strings' });
             }
 
-            if (!data || !data.assignedTo || !data.manager || !data.department) {
-                return reply.status(400).send({ message: 'Assignment data (assignedTo, manager, department) is required' });
+            if (!data || !data.assignedTo || !data.manager || !data.department || !data.location) {
+                return reply.status(400).send({ message: 'Assignment data (assignedTo, manager, department, location) is required' });
             }
 
             const updatedAssets = await this.assetsService.bulkAssignAssets(assetIds, data);
@@ -124,7 +124,7 @@ export class AssetsController {
         }
     }
 
-    async reassignAsset(request: FastifyRequest<{ Params: { id: string }, Body: { assignedTo: string; manager: string; department: string } }>, reply: FastifyReply) {
+    async reassignAsset(request: FastifyRequest<{ Params: { id: string }, Body: { assignedTo: string; manager: string; department: string; location: string } }>, reply: FastifyReply) {
         try {
             const { id } = request.params;
             const data = request.body;
@@ -146,6 +146,28 @@ export class AssetsController {
         } catch (error: any) {
             request.log.error(error);
             return reply.status(500).send({ message: error.message || 'Failed to decommission asset' });
+        }
+    }
+    async unassignAsset(request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) {
+        try {
+            const { id } = request.params;
+            const updatedAsset = await this.assetsService.unassignAsset(id);
+            return reply.send(updatedAsset);
+        } catch (error: any) {
+            request.log.error(error);
+            return reply.status(500).send({ message: error.message || 'Failed to unassign asset' });
+        }
+    }
+
+    async updateAsset(request: FastifyRequest<{ Params: { id: string }, Body: any }>, reply: FastifyReply) {
+        try {
+            const { id } = request.params;
+            const data = request.body;
+            const updatedAsset = await this.assetsService.updateAsset(id, data);
+            return reply.send(updatedAsset);
+        } catch (error: any) {
+            request.log.error(error);
+            return reply.status(500).send({ message: error.message || 'Failed to update asset' });
         }
     }
 }

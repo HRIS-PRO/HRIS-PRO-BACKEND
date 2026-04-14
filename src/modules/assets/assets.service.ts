@@ -1,8 +1,12 @@
 import { eq, inArray } from 'drizzle-orm';
-import { assets, users, assetActivities } from '../../db/schema';
+import { assets, users, assetActivities, assetLocations } from '../../db/schema';
+import { AssetLocationsService } from '../asset-locations/asset-locations.service';
 import { supabase } from '../../utils/supabase';
 import { CreateAssetInput } from './assets.schema';
 import { sendEmail } from '../shared/zepto';
+
+const assetLocationsService = new AssetLocationsService();
+
 
 export class AssetsService {
     constructor(private db: any) { }
@@ -99,9 +103,13 @@ export class AssetsService {
                         <p>Hello,</p>
                         <p>You have been assigned a new asset: <strong>${data.name}</strong> (${assetId}).</p>
                         <p>Please log in to AssetTrackPro and accept or report this assignment from your dashboard.</p>
+                        <div style="text-align: center;">
+                            <a href="https://assets.noltfinance.com" class="btn">Open AssetTrackPro &rarr;</a>
+                        </div>
                         ${fileUrl ? `<p><a href="${fileUrl}">View Attached Image/Receipt</a></p>` : ''}
                         <br/>
                         <p>Best regards,<br/>AssetTrackPro System</p>
+
                     `
                 ).catch(e => console.error("Email send failed:", e));
             }
@@ -138,7 +146,7 @@ export class AssetsService {
                 };
 
                 const [newAsset] = await this.db.insert(assets).values(values).returning();
-                
+
                 await this.db.insert(assetActivities).values({
                     type: 'system',
                     title: 'Hardware Provisioned (Batch)',
@@ -197,7 +205,7 @@ export class AssetsService {
                     .set({ status: 'ACTIVE' })
                     .where(eq(assets.id, id))
                     .returning();
-                    
+
                 if (updated) {
                     await this.db.insert(assetActivities).values({
                         type: 'system',
@@ -213,19 +221,31 @@ export class AssetsService {
                         .set({ isRead: true })
                         .where(eq(assetActivities.assetId, id));
                 }
-                
+
                 return updated;
             })
         );
         return updatedAssets.filter(Boolean);
     }
 
-    async assignAsset(id: string, data: { assignedTo: string; manager: string; department: string }) {
+    private async ensureLocationExists(locationName: string) {
+        if (!locationName || locationName === 'Remote' || locationName === 'Unknown') return;
+        const existing = await this.db.query.assetLocations.findFirst({
+            where: eq(assetLocations.name, locationName)
+        });
+        if (!existing) {
+            await assetLocationsService.create({ name: locationName })
+        }
+    }
+
+    async assignAsset(id: string, data: { assignedTo: string; manager: string; department: string; location: string }) {
+        await this.ensureLocationExists(data.location);
         const [updatedAsset] = await this.db.update(assets)
             .set({
                 assignedTo: data.assignedTo,
                 manager: data.manager,
                 department: data.department,
+                location: data.location,
                 status: 'PENDING'
             })
             .where(eq(assets.id, id))
@@ -252,7 +272,8 @@ export class AssetsService {
         return updatedAsset;
     }
 
-    async bulkAssignAssets(assetIds: string[], data: { assignedTo: string; manager: string; department: string }) {
+    async bulkAssignAssets(assetIds: string[], data: { assignedTo: string; manager: string; department: string; location: string }) {
+        await this.ensureLocationExists(data.location);
         const updatedAssets = await Promise.all(
             assetIds.map(async (id) => {
                 const [updated] = await this.db.update(assets)
@@ -260,11 +281,12 @@ export class AssetsService {
                         assignedTo: data.assignedTo,
                         manager: data.manager,
                         department: data.department,
+                        location: data.location,
                         status: 'PENDING'
                     })
                     .where(eq(assets.id, id))
                     .returning();
-                
+
                 if (updated) {
                     await this.db.insert(assetActivities).values({
                         type: 'system',
@@ -278,19 +300,21 @@ export class AssetsService {
                         hasCTA: true
                     });
                 }
-                
+
                 return updated;
             })
         );
         return updatedAssets.filter(Boolean);
     }
 
-    async reassignAsset(id: string, data: { assignedTo: string; manager: string; department: string }) {
+    async reassignAsset(id: string, data: { assignedTo: string; manager: string; department: string; location: string }) {
+        await this.ensureLocationExists(data.location);
         const [updatedAsset] = await this.db.update(assets)
             .set({
                 assignedTo: data.assignedTo,
                 manager: data.manager,
                 department: data.department,
+                location: data.location,
                 status: 'PENDING'
             })
             .where(eq(assets.id, id))
@@ -326,8 +350,12 @@ export class AssetsService {
                     <p>Hello,</p>
                     <p>You have been reassigned an existing asset: <strong>${updatedAsset.name}</strong> (${updatedAsset.id}).</p>
                     <p>Please log in to AssetTrackPro and accept or report this assignment from your dashboard.</p>
+                    <div style="text-align: center;">
+                        <a href="https://assets.noltfinance.com" class="btn">Open AssetTrackPro &rarr;</a>
+                    </div>
                     <br/>
                     <p>Best regards,<br/>AssetTrackPro System</p>
+
                 `
             ).catch(e => console.error("Email send failed for reassignment:", e));
         }
@@ -354,6 +382,68 @@ export class AssetsService {
             desc: `${updatedAsset.name} has been taken out of service.`,
             icon: 'delete',
             color: 'red',
+            roles: ['SUPER_ADMIN', 'ADMIN_USER', 'AUDITOR'],
+            assetId: id
+        });
+
+        return updatedAsset;
+    }
+
+    async unassignAsset(id: string) {
+        const [updatedAsset] = await this.db.update(assets)
+            .set({
+                assignedTo: null,
+                location: 'Main Warehouse',
+                status: 'IDLE'
+            })
+            .where(eq(assets.id, id))
+            .returning();
+
+        if (!updatedAsset) {
+            throw new Error(`Asset with id ${id} not found`);
+        }
+
+        await this.db.insert(assetActivities).values({
+            type: 'system',
+            title: 'Asset Unassigned',
+            desc: `${updatedAsset.name} was returned to the inventory.`,
+            icon: 'restart_alt',
+            color: 'slate',
+            roles: ['SUPER_ADMIN', 'ADMIN_USER', 'AUDITOR'],
+            assetId: id
+        });
+
+        return updatedAsset;
+    }
+
+    async updateAsset(id: string, data: any) {
+        const [updatedAsset] = await this.db.update(assets)
+            .set({
+                name: data.name,
+                category: data.category,
+                purchasePrice: data.purchasePrice?.toString(),
+                purchaseDate: data.purchaseDate,
+                condition: data.condition,
+                location: data.location,
+                department: data.department,
+                manager: data.manager,
+                serialNumber: data.serialNumber,
+                description: data.description,
+                status: data.status,
+            })
+            .where(eq(assets.id, id))
+            .returning();
+
+        if (!updatedAsset) {
+            throw new Error(`Asset with id ${id} not found`);
+        }
+
+        await this.db.insert(assetActivities).values({
+            type: 'system',
+            title: 'Hardware Profile Updated',
+            desc: `The profile for ${updatedAsset.name} was modified by an administrator.`,
+            icon: 'edit_square',
+            color: 'blue',
             roles: ['SUPER_ADMIN', 'ADMIN_USER', 'AUDITOR'],
             assetId: id
         });

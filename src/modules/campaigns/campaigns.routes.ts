@@ -8,7 +8,7 @@ export async function campaignsRoutes(app: FastifyInstance) {
     const campaignsService = new CampaignsService(db);
     const campaignsController = new CampaignsController(campaignsService);
 
-    app.addHook('preHandler', app.authenticate);
+    app.addHook('onRequest', app.checkAppRole('MSGSCALE_BULK'));
 
     // List campaigns in a workspace
     app.get('/:workspaceId', (request: any, reply) => campaignsController.getCampaigns(request, reply));

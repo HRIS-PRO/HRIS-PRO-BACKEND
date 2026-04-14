@@ -9,9 +9,9 @@ export class AuthController {
         request: FastifyRequest<{ Body: LoginInput }>,
         reply: FastifyReply
     ) {
-        const { email, password } = request.body;
+        const { email, password, app } = request.body;
         try {
-            await this.authService.requestLoginOtp(email, password);
+            await this.authService.requestLoginOtp(email, password, app);
             return reply.send({ message: 'If credentials are correct, OTP sent.' });
         } catch (error: any) {
             return reply.code(401).send({ message: error.message || 'Invalid email or password' });
@@ -22,9 +22,9 @@ export class AuthController {
         request: FastifyRequest<{ Body: VerifyOtpInput }>,
         reply: FastifyReply
     ) {
-        const { email, otp } = request.body;
+        const { email, otp, app } = request.body;
         try {
-            const user = await this.authService.verifyLoginOtp(email, otp);
+            const user = await this.authService.verifyLoginOtp(email, otp, app);
 
             // Generate JWT
             const token = await reply.jwtSign({
@@ -43,9 +43,9 @@ export class AuthController {
         request: FastifyRequest<{ Body: LoginInput }>,
         reply: FastifyReply
     ) {
-        const { email, password } = request.body;
+        const { email, password, app } = request.body;
         try {
-            const user = await this.authService.verifyDirectLogin(email, password);
+            const user = await this.authService.verifyDirectLogin(email, password, app);
 
             // Generate JWT
             const token = await reply.jwtSign({

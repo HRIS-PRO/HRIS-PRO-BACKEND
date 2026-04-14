@@ -6,7 +6,7 @@ export async function assetsRoutes(app: FastifyInstance) {
     const assetsService = new AssetsService(app.db);
     const assetsController = new AssetsController(assetsService);
 
-    app.addHook('onRequest', app.authenticate);
+    app.addHook('onRequest', app.checkAppRole('ASSET_TRACKER'));
 
     app.get('/', assetsController.getAllAssets.bind(assetsController));
 
@@ -46,5 +46,14 @@ export async function assetsRoutes(app: FastifyInstance) {
     app.put(
         '/:id/decommission',
         assetsController.decommissionAsset.bind(assetsController)
+    );
+    app.put(
+        '/:id/unassign',
+        assetsController.unassignAsset.bind(assetsController)
+    );
+
+    app.put(
+        '/:id',
+        assetsController.updateAsset.bind(assetsController)
     );
 }

@@ -3,11 +3,13 @@ import z from 'zod';
 export const loginSchema = z.object({
     email: z.string().email(),
     password: z.string().min(1),
+    app: z.string().optional(),
 });
 
 export const verifyOtpSchema = z.object({
     email: z.string().email(),
-    otp: z.string().length(6), // Assuming 6-digit OTP
+    otp: z.string().length(6),
+    app: z.string().optional(),
 });
 
 export type LoginInput = z.infer<typeof loginSchema>;

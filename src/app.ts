@@ -25,9 +25,13 @@ import auditsRoutes from './modules/audits/audits.routes';
 import activitiesRoutes from './modules/activities/activities.routes';
 import { wsRoutes } from './websocket/ws.routes';
 
+import { eq, and } from 'drizzle-orm';
+import { userRoles } from './db/schema';
+
 declare module 'fastify' {
     interface FastifyInstance {
         authenticate: (request: any, reply: any) => Promise<void>;
+        checkAppRole: (appName: string) => (request: any, reply: any) => Promise<void>;
     }
 }
 
@@ -62,6 +66,34 @@ const buildApp = async (): Promise<FastifyInstance> => {
         } catch (err) {
             reply.send(err);
         }
+    });
+
+    app.decorate('checkAppRole', (appName: string) => {
+        return async (request: any, reply: any) => {
+            if (!request.user) {
+                try {
+                    await request.jwtVerify();
+                } catch (err) {
+                    return reply.code(401).send({ message: 'Unauthorized' });
+                }
+            }
+
+            const userId = request.user.id;
+            
+            // Fresh check against database to catch revocations immediately
+            const roles = await app.db.query.userRoles.findMany({
+                where: and(
+                    eq(userRoles.userId, userId),
+                    eq(userRoles.app, appName as any)
+                )
+            });
+
+            if (roles.length === 0) {
+                return reply.code(403).send({ 
+                    message: `Access Denied: You do not have an active role for ${appName}.` 
+                });
+            }
+        };
     });
 
     // Zod validation setup
