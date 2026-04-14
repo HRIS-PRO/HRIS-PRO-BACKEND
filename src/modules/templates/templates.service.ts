@@ -10,7 +10,7 @@ export class TemplatesService {
 
     async getTemplates(ownerId: string) {
         return await this.db.query.templates.findMany({
-            where: eq(templates.ownerId, ownerId),
+            // where: eq(templates.ownerId, ownerId),
             orderBy: (templates, { desc }) => [desc(templates.createdAt)],
         });
     }
