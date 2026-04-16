@@ -487,32 +487,50 @@ export class CampaignsService {
         }
     }
 
-    async previewContextMatch(workspaceId: string, groupIds: string[], externalData: { identifier: string }[]) {
-        if (!groupIds.length || !externalData.length) {
-            return { matchedCount: 0, unmatchedCount: externalData.length, totalExternal: externalData.length, unmatchedSamples: [] };
+    async previewContextMatch(workspaceId: string, groupIds: string[], externalData: { identifier: string; [key: string]: any }[]) {
+        if (!groupIds.length) {
+            return { matched: 0, unmatched: externalData?.length || 0, unmatchedIdentifiers: [], sampleContacts: [] };
         }
 
-        // 1. Resolve all identifiers in the selected groups
-        // We fetch mobilePhone and email since either could be an identifier
         const engine = new CampaignsEngine(this.db as any);
-        const contactIdentifiers = new Set<string>();
+        const contactIdentifiers = new Map<string, any>();
+        const sampleContacts: any[] = [];
 
         for (const groupId of groupIds) {
             const contacts = await engine.resolveGroupContacts(groupId);
             contacts.forEach(c => {
-                if (c.mobilePhone) contactIdentifiers.add(normalizeIdentifier(c.mobilePhone));
-                if (c.email) contactIdentifiers.add(normalizeIdentifier(c.email));
+                const contactData = { ...c };
+                if (c.customFields) {
+                    Object.assign(contactData, c.customFields);
+                }
+                
+                if (c.mobilePhone) contactIdentifiers.set(normalizeIdentifier(c.mobilePhone), contactData);
+                if (c.email) contactIdentifiers.set(normalizeIdentifier(c.email), contactData);
+                
+                if (sampleContacts.length < 10) {
+                    sampleContacts.push(contactData);
+                }
             });
         }
 
-        // 2. Compare with external data
+        if (!externalData || externalData.length === 0) {
+            return { matched: 0, unmatched: 0, unmatchedIdentifiers: [], sampleContacts: sampleContacts.slice(0, 10) };
+        }
+
         let matchedCount = 0;
         const unmatchedSamples: string[] = [];
+        const enrichedSamples: any[] = [];
 
         externalData.forEach(item => {
             const normalized = normalizeIdentifier(String(item.identifier));
             if (contactIdentifiers.has(normalized)) {
                 matchedCount++;
+                const contact = contactIdentifiers.get(normalized);
+                if (enrichedSamples.length < 10) {
+                    const enriched = { ...contact, ...item };
+                    if (item.data) Object.assign(enriched, item.data);
+                    enrichedSamples.push(enriched);
+                }
             } else {
                 if (unmatchedSamples.length < 5) unmatchedSamples.push(item.identifier);
             }
@@ -521,7 +539,8 @@ export class CampaignsService {
         return {
             matched: matchedCount,
             unmatched: externalData.length - matchedCount,
-            unmatchedIdentifiers: unmatchedSamples
+            unmatchedIdentifiers: unmatchedSamples,
+            sampleContacts: enrichedSamples.length > 0 ? enrichedSamples : sampleContacts.slice(0, 10)
         };
     }
 }
