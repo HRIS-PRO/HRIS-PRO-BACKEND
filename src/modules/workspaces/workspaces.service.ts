@@ -399,27 +399,30 @@ export class WorkspacesService {
         return updated;
     }
 
-    async getBulkCustomers(page: number = 1, limit: number = 20, search: string = '') {
+    async getBulkCustomers(page: number = 1, limit: number = 20, search: string = '', type: string = '') {
         const cleanSearch = search ? search.trim().replace(/\s+/g, ' ') : '';
         const searchPattern = cleanSearch ? `%${cleanSearch}%` : null;
         
         const normalizedSearch = normalizeIdentifier(cleanSearch);
 
-        const baseQueryConditions = searchPattern 
-            ? or(
-                ilike(bulkCustomers.firstName, searchPattern),
-                ilike(bulkCustomers.surname, searchPattern),
-                ilike(bulkCustomers.fullName, searchPattern),
-                sql`CONCAT(${bulkCustomers.firstName}, ' ', ${bulkCustomers.surname}) ILIKE ${searchPattern}`,
-                sql`CONCAT(${bulkCustomers.surname}, ' ', ${bulkCustomers.firstName}) ILIKE ${searchPattern}`,
-                ilike(bulkCustomers.email, searchPattern),
-                ilike(bulkCustomers.mobilePhone, searchPattern),
-                normalizedSearch ? eq(bulkCustomers.mobilePhone, normalizedSearch) : undefined,
-                ilike(bulkCustomers.otherName, searchPattern),
-                ilike(bulkCustomers.customerType, searchPattern),
-                ilike(bulkCustomers.occupation, searchPattern)
-            )
-            : undefined;
+        const baseQueryConditions = and(
+            searchPattern 
+                ? or(
+                    ilike(bulkCustomers.firstName, searchPattern),
+                    ilike(bulkCustomers.surname, searchPattern),
+                    ilike(bulkCustomers.fullName, searchPattern),
+                    sql`CONCAT(${bulkCustomers.firstName}, ' ', ${bulkCustomers.surname}) ILIKE ${searchPattern}`,
+                    sql`CONCAT(${bulkCustomers.surname}, ' ', ${bulkCustomers.firstName}) ILIKE ${searchPattern}`,
+                    ilike(bulkCustomers.email, searchPattern),
+                    ilike(bulkCustomers.mobilePhone, searchPattern),
+                    normalizedSearch ? eq(bulkCustomers.mobilePhone, normalizedSearch) : undefined,
+                    ilike(bulkCustomers.otherName, searchPattern),
+                    ilike(bulkCustomers.customerType, searchPattern),
+                    ilike(bulkCustomers.occupation, searchPattern)
+                )
+                : undefined,
+            (type && type !== 'All') ? eq(bulkCustomers.customerType, type) : undefined
+        );
 
         const [totalCountResult] = await this.db.select({ count: sql`count(*)`.mapWith(Number) })
             .from(bulkCustomers)
@@ -454,27 +457,30 @@ export class WorkspacesService {
     async findCustomersByIdentifiers(identifiers: string[]) {
         if (!identifiers || identifiers.length === 0) return [];
 
-        const normalizedInputs = identifiers.map(id => normalizeIdentifier(id));
-        const cleanDigitsOnly = identifiers.map(id => id.replace(/\D/g, ''));
+        const validIdentifiers = identifiers.filter(id => id && String(id).trim() !== '' && String(id) !== 'undefined');
+        if (validIdentifiers.length === 0) return [];
 
-        // We want to match if:
-        // 1. Literal email match
-        // 2. Literal phone match
-        // 3. Normalized input matches normalized DB phone
+        const normalizedInputs = validIdentifiers.map(id => normalizeIdentifier(id)).filter(id => id.length > 0);
+        const cleanDigitsOnly = validIdentifiers.map(id => String(id).replace(/\D/g, '')).filter(id => id.length > 0);
+
+        const conditions = [];
+        conditions.push(inArray(bulkCustomers.email, validIdentifiers));
+        conditions.push(inArray(bulkCustomers.mobilePhone, validIdentifiers));
+
+        if (cleanDigitsOnly.length > 0) {
+            conditions.push(inArray(sql`regexp_replace(${bulkCustomers.mobilePhone}, '[^0-9]', '', 'g')`, cleanDigitsOnly));
+        }
+
+        if (normalizedInputs.length > 0) {
+            conditions.push(inArray(sql`CASE 
+                WHEN regexp_replace(${bulkCustomers.mobilePhone}, '[^0-9]', '', 'g') ~ '^0[789][01][0-9]{8}$' 
+                THEN '234' || substr(regexp_replace(${bulkCustomers.mobilePhone}, '[^0-9]', '', 'g'), 2)
+                ELSE regexp_replace(${bulkCustomers.mobilePhone}, '[^0-9]', '', 'g')
+            END`, normalizedInputs));
+        }
+
         return await this.db.query.bulkCustomers.findMany({
-            where: or(
-                inArray(bulkCustomers.email, identifiers),
-                inArray(bulkCustomers.mobilePhone, identifiers),
-                // Advanced matching for phone numbers:
-                // Clean the DB column of non-digits and compare against cleaned inputs
-                inArray(sql`regexp_replace(${bulkCustomers.mobilePhone}, '[^0-9]', '', 'g')`, cleanDigitsOnly),
-                // Also check against 234-prefixed versions
-                inArray(sql`CASE 
-                    WHEN regexp_replace(${bulkCustomers.mobilePhone}, '[^0-9]', '', 'g') ~ '^0[789][01][0-9]{8}$' 
-                    THEN '234' || substr(regexp_replace(${bulkCustomers.mobilePhone}, '[^0-9]', '', 'g'), 2)
-                    ELSE regexp_replace(${bulkCustomers.mobilePhone}, '[^0-9]', '', 'g')
-                END`, normalizedInputs)
-            ),
+            where: or(...conditions),
         });
     }
 
@@ -511,18 +517,23 @@ export class WorkspacesService {
                 const contextualInserts: any[] = [];
 
                 if (data.contextualData && data.contextualData.length > 0) {
-                    const originalIdentifiers = data.contextualData.map(d => d.identifier);
-                    const normalizedIdentifiers = originalIdentifiers.map(id => normalizeIdentifier(id));
+                    const originalIdentifiers = data.contextualData.map(d => String(d.identifier || '')).filter(id => id.trim() !== '' && id !== 'undefined');
+                    const normalizedIdentifiers = originalIdentifiers.map(id => normalizeIdentifier(id)).filter(id => id.length > 0);
                     
+                    const conditions = [];
+                    if (originalIdentifiers.length > 0) {
+                        conditions.push(inArray(bulkCustomers.email, originalIdentifiers));
+                        conditions.push(inArray(bulkCustomers.mobilePhone, originalIdentifiers));
+                    }
+                    if (normalizedIdentifiers.length > 0) {
+                        conditions.push(inArray(bulkCustomers.email, normalizedIdentifiers));
+                        conditions.push(inArray(bulkCustomers.mobilePhone, normalizedIdentifiers));
+                    }
+
                     // Lookup customers by identifier (email or phone)
-                    const matchedCustomers = await tx.query.bulkCustomers.findMany({
-                        where: or(
-                            inArray(bulkCustomers.email, originalIdentifiers),
-                            inArray(bulkCustomers.mobilePhone, originalIdentifiers),
-                            inArray(bulkCustomers.email, normalizedIdentifiers),
-                            inArray(bulkCustomers.mobilePhone, normalizedIdentifiers)
-                        )
-                    });
+                    const matchedCustomers = conditions.length > 0 ? await tx.query.bulkCustomers.findMany({
+                        where: or(...conditions)
+                    }) : [];
 
                     // Create a lookup map for efficiency. 
                     // Map both the exact value in DB AND its normalized version (though they should be same).
