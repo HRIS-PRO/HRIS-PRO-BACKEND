@@ -336,12 +336,13 @@ export class CampaignsService {
                     <div style="background:#f5f3ff;border-left:4px solid #4F46E5;padding:16px 20px;border-radius:8px;margin:24px 0">
                         <p style="margin:0;font-size:12px;color:#4F46E5;font-weight:700;text-transform:uppercase;letter-spacing:1px">Campaign Details</p>
                         <p style="margin:8px 0 0;font-size:14px"><strong>Name:</strong> ${campaign.name}</p>
+                        <p style="margin:4px 0 0;font-size:14px"><strong>Workspace:</strong> ${workspace.title}</p>
                         <p style="margin:4px 0 0;font-size:14px"><strong>Channel:</strong> ${campaign.channel}</p>
                         <p style="margin:4px 0 0;font-size:14px"><strong>Submitted by:</strong> ${actorName}</p>
                     </div>
                     <p style="font-size:14px;color:#555">Please log in to review the details and approve or reject the broadcast.</p>
                     <div style="text-align:center;margin-top:32px">
-                        <a href="https://msg.noltfinance.com/campaigns/${campaignId}" style="display:inline-block;background-color:#4F46E5;color:#fff;padding:14px 36px;border-radius:50px;text-decoration:none;font-weight:bold;font-size:14px">Review Campaign &rarr;</a>
+                        <a href="https://msg.noltfinance.com" style="display:inline-block;background-color:#4F46E5;color:#fff;padding:14px 36px;border-radius:50px;text-decoration:none;font-weight:bold;font-size:14px">Review Campaign &rarr;</a>
                     </div>
                 </div>
             `;
