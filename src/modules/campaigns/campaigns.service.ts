@@ -208,6 +208,11 @@ export class CampaignsService {
             if (rest.content) updateData.content = rest.content;
             if (rest.scheduledAt) updateData.scheduledAt = new Date(rest.scheduledAt);
 
+            if (existing.status === 'REJECTED') {
+                updateData.status = 'DRAFT';
+                updateData.approverId = null;
+            }
+
             const [updatedCampaign] = await tx.update(campaigns)
                 .set(updateData)
                 .where(eq(campaigns.id, id))

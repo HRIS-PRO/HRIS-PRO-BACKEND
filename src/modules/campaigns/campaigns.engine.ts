@@ -35,8 +35,23 @@ export class CampaignsEngine {
             return isNaN(date.getTime()) ? null : date;
         }
 
-        const date = new Date(dateStr);
-        return isNaN(date.getTime()) ? null : date;
+        let date = new Date(dateStr);
+        if (!isNaN(date.getTime())) return date;
+
+        // Fallback for explicit DD/MM/YYYY or DD-MM-YYYY when Javascript Date fails (e.g. 21/04/2000)
+        const parts = dateStr.toString().split(/[\/\-]/);
+        if (parts.length === 3) {
+            const d = parseInt(parts[0], 10);
+            const m = parseInt(parts[1], 10);
+            const y = parseInt(parts[2], 10);
+            
+            if (m >= 1 && m <= 12 && d >= 1 && d <= 31) {
+                date = new Date(y, m - 1, d);
+                if (!isNaN(date.getTime())) return date;
+            }
+        }
+
+        return null;
     }
 
     async executeCycleCampaign(campaignId: string) {
@@ -102,7 +117,10 @@ export class CampaignsEngine {
         const currentDate = now.getDate();
         
         const anniversaryContacts = allContacts.filter(contact => {
-            const rawDate = (contact as any)[config.field];
+            let rawDate = (contact as any)[config.field];
+            if (rawDate === undefined && contact.customFields) {
+                rawDate = (contact.customFields as any)[config.field];
+            }
             const parsedDate = this.parseDateAnyFormat(rawDate);
             if (!parsedDate) return false;
             

@@ -137,7 +137,7 @@ export class AuthService {
     async verifyDirectLogin(email: string, password: string, app?: string) {
         // Find user by email
         const user = await this.db.query.users.findFirst({
-            where: eq(users.email, email),
+            where: eq(users.email, email.toLowerCase()),
             with: {
                 roles: true,
                 employee: true,
