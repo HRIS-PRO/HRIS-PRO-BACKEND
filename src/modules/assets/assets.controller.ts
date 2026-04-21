@@ -62,10 +62,11 @@ export class AssetsController {
         }
     }
 
-    async acceptAsset(request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) {
+    async acceptAsset(request: FastifyRequest<{ Params: { id: string }, Body?: { consentSignature?: string } }>, reply: FastifyReply) {
         try {
             const { id } = request.params;
-            const updatedAsset = await this.assetsService.acceptAsset(id);
+            const consentSignature = request.body?.consentSignature;
+            const updatedAsset = await this.assetsService.acceptAsset(id, consentSignature);
             return reply.send(updatedAsset);
         } catch (error: any) {
             request.log.error(error);

@@ -165,9 +165,12 @@ export class AssetsService {
         return results;
     }
 
-    async acceptAsset(assetId: string) {
+    async acceptAsset(assetId: string, consentSignature?: string) {
         const [updatedAsset] = await this.db.update(assets)
-            .set({ status: 'ACTIVE' })
+            .set({ 
+                status: 'ACTIVE',
+                ...(consentSignature && { consentSignature })
+            })
             .where(eq(assets.id, assetId))
             .returning();
 
@@ -267,7 +270,28 @@ export class AssetsService {
             hasCTA: true
         });
 
-        // Logic to dispatch consent email can go here in the future
+        // Fetch assignee email
+        const assignee = await this.db.query.users.findFirst({
+            where: eq(users.id, data.assignedTo),
+        });
+
+        if (assignee) {
+            await sendEmail(
+                assignee.email,
+                'New Asset Assignment Pending Review',
+                `
+                    <h2>Asset Assignment Review</h2>
+                    <p>Hello,</p>
+                    <p>You have been assigned an asset: <strong>${updatedAsset.name}</strong> (${updatedAsset.id}).</p>
+                    <p>Please log in to AssetTrackPro and review this assignment from your dashboard.</p>
+                    <div style="text-align: center;">
+                        <a href="https://assets.noltfinance.com" class="btn">Open AssetTrackPro &rarr;</a>
+                    </div>
+                    <br/>
+                    <p>Best regards,<br/>AssetTrackPro System</p>
+                `
+            ).catch(e => console.error("Email send failed for assignment:", e));
+        }
 
         return updatedAsset;
     }
@@ -299,6 +323,28 @@ export class AssetsService {
                         assetId: id,
                         hasCTA: true
                     });
+
+                    const assignee = await this.db.query.users.findFirst({
+                        where: eq(users.id, data.assignedTo),
+                    });
+
+                    if (assignee) {
+                        await sendEmail(
+                            assignee.email,
+                            'New Asset Assignment Pending Review',
+                            `
+                                <h2>Asset Assignment Review</h2>
+                                <p>Hello,</p>
+                                <p>You have been assigned an asset: <strong>${updated.name}</strong> (${updated.id}).</p>
+                                <p>Please log in to AssetTrackPro and review this assignment from your dashboard.</p>
+                                <div style="text-align: center;">
+                                    <a href="https://assets.noltfinance.com" class="btn">Open AssetTrackPro &rarr;</a>
+                                </div>
+                                <br/>
+                                <p>Best regards,<br/>AssetTrackPro System</p>
+                            `
+                        ).catch(e => console.error("Email send failed for bulk assignment:", e));
+                    }
                 }
 
                 return updated;

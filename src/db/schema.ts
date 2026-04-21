@@ -150,6 +150,7 @@ export const assets = pgTable("ASSET", {
     serialNumber: text("serialNumber"),
     description: text("description"),
     fileUrl: text("fileUrl"), // Supabase storage URL
+    consentSignature: text("consentSignature"), // Base64 signature from consent
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
 });
