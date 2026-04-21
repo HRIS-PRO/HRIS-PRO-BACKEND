@@ -128,7 +128,7 @@ export class AssetsController {
         try {
             const { id } = request.params;
             const data = request.body;
-            
+
             // Should verify user is super-admin here or rely on route guard
             const updatedAsset = await this.assetsService.reassignAsset(id, data);
             return reply.send(updatedAsset);
