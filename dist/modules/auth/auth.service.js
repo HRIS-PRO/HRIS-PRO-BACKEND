@@ -14,16 +14,27 @@ class AuthService {
     constructor(db) {
         this.db = db;
     }
-    async requestLoginOtp(email, password) {
+    async requestLoginOtp(email, password, app) {
         // Find user by email
         const user = await this.db.query.users.findFirst({
             where: (0, drizzle_orm_1.eq)(schema_1.users.email, email),
+            with: {
+                roles: true
+            }
         });
         if (!user) {
             // Security: Use same error message as password failure to prevent enumeration in UI message,
             // though we console.warn for internal logs.
             console.warn(`Login attempt for non-existent user: ${email}`);
             throw new Error('Invalid email or password');
+        }
+        // Check app access if provided
+        if (app) {
+            const hasRole = user.roles.some(r => r.app === app);
+            if (!hasRole) {
+                console.warn(`User ${email} attempted unauthorized login to ${app}`);
+                throw new Error(`You do not have permission to access ${app}. Please contact an administrator.`);
+            }
         }
         // Verify Password
         if (!user.passwordHash) {
@@ -70,7 +81,7 @@ class AuthService {
             </div>
             `);
     }
-    async verifyLoginOtp(email, otp) {
+    async verifyLoginOtp(email, otp, app) {
         // Find user with roles
         const user = await this.db.query.users.findFirst({
             where: (0, drizzle_orm_1.eq)(schema_1.users.email, email),
@@ -89,6 +100,13 @@ class AuthService {
         if (inputHash !== user.otpHash) {
             throw new Error('Invalid OTP');
         }
+        // If an app is specified, check if the user has a role for it
+        if (app) {
+            const hasRole = user.roles.some(r => r.app === app);
+            if (!hasRole) {
+                throw new Error(`You do not have permission to access ${app}. Please contact an administrator.`);
+            }
+        }
         // Clear OTP
         await this.db.update(schema_1.users)
             .set({
@@ -98,10 +116,10 @@ class AuthService {
             .where((0, drizzle_orm_1.eq)(schema_1.users.id, user.id));
         return user;
     }
-    async verifyDirectLogin(email, password) {
+    async verifyDirectLogin(email, password, app) {
         // Find user by email
         const user = await this.db.query.users.findFirst({
-            where: (0, drizzle_orm_1.eq)(schema_1.users.email, email),
+            where: (0, drizzle_orm_1.eq)(schema_1.users.email, email.toLowerCase()),
             with: {
                 roles: true,
                 employee: true,
@@ -114,10 +132,12 @@ class AuthService {
         if (!isPasswordValid) {
             throw new Error('Invalid email or password');
         }
-        // Enforce MsgScale role check
-        const msgScaleRole = user.roles.find(r => r.app === 'MSGSCALE_BULK');
-        if (!msgScaleRole) {
-            throw new Error('You do not have permission to access MsgScale Bulk Messaging. Please contact an administrator.');
+        // Enforce role check if app is specified
+        if (app) {
+            const hasRole = user.roles.some(r => r.app === app);
+            if (!hasRole) {
+                throw new Error(`You do not have permission to access ${app}. Please contact an administrator.`);
+            }
         }
         return user;
     }

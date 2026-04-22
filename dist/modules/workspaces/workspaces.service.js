@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.WorkspacesService = void 0;
 const drizzle_orm_1 = require("drizzle-orm");
 const schema_1 = require("../../db/schema");
+const phone_utils_1 = require("../../utils/phone-utils");
 const zepto_1 = require("../shared/zepto");
 class WorkspacesService {
     db;
@@ -227,7 +228,7 @@ class WorkspacesService {
                                 </div>
                                 <p style="font-size:14px;color:#555">Log in and select <strong style="color:#667eea">${workspace.title}</strong> from your workspace list to get started.</p>
                                 <div style="text-align:center;margin-top:32px">
-                                    <a href="#" style="display:inline-block;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;padding:14px 36px;border-radius:50px;text-decoration:none;font-weight:900;font-size:14px">Open MsgScale →</a>
+                                    <a href="https://msg.noltfinance.com" style="display:inline-block;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;padding:14px 36px;border-radius:50px;text-decoration:none;font-weight:900;font-size:14px">Open MsgScale →</a>
                                 </div>
                             </div>
                         </div>
@@ -245,47 +246,57 @@ class WorkspacesService {
     async bulkAddCustomers(customersData) {
         if (!customersData || customersData.length === 0)
             return { added: 0, skipped: 0 };
-        const mappedCustomers = customersData.map(data => ({
-            customerType: data.customerType || data['Customer Type'] || 'Retail',
-            customerExternalId: data.customerExternalId || data['Customer External ID'] || data['Customer Id'] || '',
-            title: data.title || data['Title'] || '',
-            surname: data.surname || data['Surname'] || '',
-            firstName: data.firstName || data['First Name'] || '',
-            otherName: data.otherName || data['Other Name'] || '',
-            fullName: data.fullName || data['Full Name'] || `${data.firstName || data['First Name'] || ''} ${data.surname || data['Surname'] || ''}`.trim(),
-            dob: data.dob || data['Date of Birth'] || data['DOB'] || '',
-            gender: data.gender || data['Gender'] || '',
-            nationality: data.nationality || data['Nationality'] || '',
-            stateOfOrigin: data.stateOfOrigin || data['State of Origin'] || '',
-            residentialState: data.residentialState || data['Residential State'] || '',
-            residentialTown: data.residentialTown || data['Residential Town'] || '',
-            address: data.address || data['Address'] || '',
-            mobilePhone: data.mobilePhone || data['Mobile Phone'] || '',
-            bvn: data.bvn || data['BVN'] || '',
-            nin: data.nin || data['NIN'] || '',
-            email: data.email || data['Email'] || data['EMAIL'] || '',
-            tin: data.tin || data['TIN'] || '',
-            educationLevel: data.educationLevel || data['Education Level'] || '',
-            occupation: data.occupation || data['Occupation'] || '',
-            sector: data.sector || data['Sector'] || '',
-            office: data.office || data['Office'] || '',
-            officePhone: data.officePhone || data['Office Phone'] || '',
-            officeAddress: data.officeAddress || data['Office Address'] || '',
-            nextOfKin: data.nextOfKin || data['Next of Kin'] || '',
-            nextOfKinAddress: data.nextOfKinAddress || data['Next of Kin Address'] || '',
-            nextOfKinPhone: data.nextOfKinPhone || data['Next of Kin Phone'] || data['Next Of Kin Phone'] || '',
-            idCardType: data.idCardType || data['ID Card Type'] || data['Id Card Type'] || '',
-            idCardNo: data.idCardNo || data['ID Card No'] || data['Id Card No'] || '',
-            idIssueDate: data.idIssueDate || data['ID Issue Date'] || data['Id Issue Date'] || '',
-            idExpiryDate: data.idExpiryDate || data['ID Expiry Date'] || data['Id Expiry Date'] || '',
-            isPep: data.isPep || data['Is PEP'] || data['Is Pep'] || 'No',
-            pepDetails: data.pepDetails || data['PEP Details'] || data['Pep Details'] || '',
-            externalCreatedAt: data.externalCreatedAt || data['External Created At'] || data['Created On'] || new Date().toISOString(),
-            customFields: JSON.stringify(data.customFields || {}),
-        }));
-        const phones = mappedCustomers.map(c => c.mobilePhone).filter(Boolean);
-        const emails = mappedCustomers.map(c => c.email).filter(Boolean);
-        const externalIds = mappedCustomers.map(c => c.customerExternalId).filter(Boolean);
+        const mappedCustomers = customersData.map(data => {
+            const customerType = data.customerType || data['Customer Type'] || (data['Registration No'] ? 'Corporate' : 'Individual');
+            const mobilePhone = (0, phone_utils_1.normalizePhoneNumber)(data.mobilePhone || data['Mobile Phone'] || data['Phone No'] || '');
+            return {
+                customerType,
+                customerExternalId: String(data.customerExternalId || data['Customer External ID'] || data['Customer Id'] || ''),
+                title: data.title || data['Title'] || '',
+                surname: data.surname || data['Surname'] || '',
+                firstName: data.firstName || data['First Name'] || '',
+                otherName: data.otherName || data['Other Name'] || '',
+                fullName: data.fullName || data['Full Name'] || data['Name'] || `${data.firstName || data['First Name'] || ''} ${data.surname || data['Surname'] || ''}`.trim(),
+                dob: data.dob || data['Date of Birth'] || data['DOB'] || '',
+                gender: data.gender || data['Gender'] || '',
+                nationality: data.nationality || data['Nationality'] || '',
+                stateOfOrigin: data.stateOfOrigin || data['State of Origin'] || '',
+                residentialState: data.residentialState || data['Residential State'] || '',
+                residentialTown: data.residentialTown || data['Residential Town'] || '',
+                address: data.address || data['Address'] || '',
+                mobilePhone,
+                bvn: data.bvn || data['BVN'] || '',
+                nin: data.nin || data['NIN'] || '',
+                email: (data.email || data['Email'] || data['Email Address'] || '').trim().toLowerCase(),
+                tin: data.tin || data['TIN'] || data['Tax Identification No'] || '',
+                educationLevel: data.educationLevel || data['Education Level'] || '',
+                occupation: data.occupation || data['Occupation'] || '',
+                sector: data.sector || data['Sector'] || '',
+                office: data.office || data['Office'] || '',
+                officePhone: (0, phone_utils_1.normalizePhoneNumber)(data.officePhone || data['Office Phone'] || data['Office No'] || ''),
+                officeAddress: data.officeAddress || data['Office Address'] || '',
+                nextOfKin: data.nextOfKin || data['Next of Kin'] || '',
+                nextOfKinAddress: data.nextOfKinAddress || data['Next of Kin Address'] || '',
+                nextOfKinPhone: (0, phone_utils_1.normalizePhoneNumber)(data.nextOfKinPhone || data['Next of Kin Phone'] || ''),
+                idCardType: data.idCardType || data['ID Card Type'] || '',
+                idCardNo: data.idCardNo || data['ID Card No'] || '',
+                idIssueDate: data.idIssueDate || data['ID Issue Date'] || '',
+                idExpiryDate: data.idExpiryDate || data['ID Expiry Date'] || '',
+                isPep: data.isPep || data['Is PEP'] || 'No',
+                pepDetails: data.pepDetails || data['PEP Details'] || '',
+                registrationNo: data.registrationNo || data['Registration No'] || '',
+                dateOfIncorporation: data.dateOfIncorporation || data['Date Of Incorporation'] || '',
+                countryOfIncorporation: data.countryOfIncorporation || data['Country Of Incorporation'] || '',
+                stateOfIncorporation: data.stateOfIncorporation || data['State Of Incorporation'] || '',
+                contactPerson: data.contactPerson || data['Contact Person'] || '',
+                accountOfficer: data.accountOfficer || data['Account Officer'] || '',
+                externalCreatedAt: data.externalCreatedAt || data['External Created At'] || new Date().toISOString(),
+                customFields: JSON.stringify(data.customFields || {}),
+            };
+        });
+        const phones = mappedCustomers.map(c => String(c.mobilePhone || '')).filter(Boolean);
+        const emails = mappedCustomers.map(c => String(c.email || '')).filter(Boolean);
+        const externalIds = mappedCustomers.map(c => String(c.customerExternalId || '')).filter(Boolean);
         const conditions = [];
         if (phones.length > 0)
             conditions.push((0, drizzle_orm_1.inArray)(schema_1.bulkCustomers.mobilePhone, phones));
@@ -339,11 +350,13 @@ class WorkspacesService {
             .returning();
         return updated;
     }
-    async getBulkCustomers(page = 1, limit = 20, search = '') {
-        const searchPattern = search ? `%${search}%` : null;
-        const baseQueryConditions = searchPattern
-            ? (0, drizzle_orm_1.or)((0, drizzle_orm_1.ilike)(schema_1.bulkCustomers.firstName, searchPattern), (0, drizzle_orm_1.ilike)(schema_1.bulkCustomers.surname, searchPattern), (0, drizzle_orm_1.ilike)(schema_1.bulkCustomers.email, searchPattern), (0, drizzle_orm_1.ilike)(schema_1.bulkCustomers.mobilePhone, searchPattern), (0, drizzle_orm_1.ilike)(schema_1.bulkCustomers.otherName, searchPattern), (0, drizzle_orm_1.ilike)(schema_1.bulkCustomers.customerType, searchPattern), (0, drizzle_orm_1.ilike)(schema_1.bulkCustomers.occupation, searchPattern))
-            : undefined;
+    async getBulkCustomers(page = 1, limit = 20, search = '', type = '') {
+        const cleanSearch = search ? search.trim().replace(/\s+/g, ' ') : '';
+        const searchPattern = cleanSearch ? `%${cleanSearch}%` : null;
+        const normalizedSearch = (0, phone_utils_1.normalizeIdentifier)(cleanSearch);
+        const baseQueryConditions = (0, drizzle_orm_1.and)(searchPattern
+            ? (0, drizzle_orm_1.or)((0, drizzle_orm_1.ilike)(schema_1.bulkCustomers.firstName, searchPattern), (0, drizzle_orm_1.ilike)(schema_1.bulkCustomers.surname, searchPattern), (0, drizzle_orm_1.ilike)(schema_1.bulkCustomers.fullName, searchPattern), (0, drizzle_orm_1.sql) `CONCAT(${schema_1.bulkCustomers.firstName}, ' ', ${schema_1.bulkCustomers.surname}) ILIKE ${searchPattern}`, (0, drizzle_orm_1.sql) `CONCAT(${schema_1.bulkCustomers.surname}, ' ', ${schema_1.bulkCustomers.firstName}) ILIKE ${searchPattern}`, (0, drizzle_orm_1.ilike)(schema_1.bulkCustomers.email, searchPattern), (0, drizzle_orm_1.ilike)(schema_1.bulkCustomers.mobilePhone, searchPattern), normalizedSearch ? (0, drizzle_orm_1.eq)(schema_1.bulkCustomers.mobilePhone, normalizedSearch) : undefined, (0, drizzle_orm_1.ilike)(schema_1.bulkCustomers.otherName, searchPattern), (0, drizzle_orm_1.ilike)(schema_1.bulkCustomers.customerType, searchPattern), (0, drizzle_orm_1.ilike)(schema_1.bulkCustomers.occupation, searchPattern))
+            : undefined, (type && type !== 'All') ? (0, drizzle_orm_1.eq)(schema_1.bulkCustomers.customerType, type) : undefined);
         const [totalCountResult] = await this.db.select({ count: (0, drizzle_orm_1.sql) `count(*)`.mapWith(Number) })
             .from(schema_1.bulkCustomers)
             .where(baseQueryConditions);
@@ -369,6 +382,31 @@ class WorkspacesService {
             }
         };
     }
+    async findCustomersByIdentifiers(identifiers) {
+        if (!identifiers || identifiers.length === 0)
+            return [];
+        const validIdentifiers = identifiers.filter(id => id && String(id).trim() !== '' && String(id) !== 'undefined');
+        if (validIdentifiers.length === 0)
+            return [];
+        const normalizedInputs = validIdentifiers.map(id => (0, phone_utils_1.normalizeIdentifier)(id)).filter(id => id.length > 0);
+        const cleanDigitsOnly = validIdentifiers.map(id => String(id).replace(/\D/g, '')).filter(id => id.length > 0);
+        const conditions = [];
+        conditions.push((0, drizzle_orm_1.inArray)(schema_1.bulkCustomers.email, validIdentifiers));
+        conditions.push((0, drizzle_orm_1.inArray)(schema_1.bulkCustomers.mobilePhone, validIdentifiers));
+        if (cleanDigitsOnly.length > 0) {
+            conditions.push((0, drizzle_orm_1.inArray)((0, drizzle_orm_1.sql) `regexp_replace(${schema_1.bulkCustomers.mobilePhone}, '[^0-9]', '', 'g')`, cleanDigitsOnly));
+        }
+        if (normalizedInputs.length > 0) {
+            conditions.push((0, drizzle_orm_1.inArray)((0, drizzle_orm_1.sql) `CASE 
+                WHEN regexp_replace(${schema_1.bulkCustomers.mobilePhone}, '[^0-9]', '', 'g') ~ '^0[789][01][0-9]{8}$' 
+                THEN '234' || substr(regexp_replace(${schema_1.bulkCustomers.mobilePhone}, '[^0-9]', '', 'g'), 2)
+                ELSE regexp_replace(${schema_1.bulkCustomers.mobilePhone}, '[^0-9]', '', 'g')
+            END`, normalizedInputs));
+        }
+        return await this.db.query.bulkCustomers.findMany({
+            where: (0, drizzle_orm_1.or)(...conditions),
+        });
+    }
     async deleteBulkCustomers(customerIds) {
         if (!customerIds || customerIds.length === 0)
             return { deleted: 0 };
@@ -386,17 +424,67 @@ class WorkspacesService {
                 name: data.name,
                 type: data.type,
             }).returning();
-            // 2. Handle Static Group Members
-            if (data.type === 'static' && data.customerIds && data.customerIds.length > 0) {
-                const memberInserts = data.customerIds.map(customerId => ({
-                    groupId: newGroup.id,
-                    customerId,
-                }));
-                // Insert in batches if large, or just one go if small. Assuming < 10k for now.
-                // To be safe, chunk it to avoid Postgres parameter limits (65535)
-                const BATCH_SIZE = 1000;
-                for (let i = 0; i < memberInserts.length; i += BATCH_SIZE) {
-                    await tx.insert(schema_1.groupMembers).values(memberInserts.slice(i, i + BATCH_SIZE));
+            // 2. Handle Static Group Members & Contextual Data
+            if (data.type === 'static') {
+                const finalCustomerIds = new Set(data.customerIds || []);
+                const contextualInserts = [];
+                if (data.contextualData && data.contextualData.length > 0) {
+                    const originalIdentifiers = data.contextualData.map(d => String(d.identifier || '')).filter(id => id.trim() !== '' && id !== 'undefined');
+                    const normalizedIdentifiers = originalIdentifiers.map(id => (0, phone_utils_1.normalizeIdentifier)(id)).filter(id => id.length > 0);
+                    const conditions = [];
+                    if (originalIdentifiers.length > 0) {
+                        conditions.push((0, drizzle_orm_1.inArray)(schema_1.bulkCustomers.email, originalIdentifiers));
+                        conditions.push((0, drizzle_orm_1.inArray)(schema_1.bulkCustomers.mobilePhone, originalIdentifiers));
+                    }
+                    if (normalizedIdentifiers.length > 0) {
+                        conditions.push((0, drizzle_orm_1.inArray)(schema_1.bulkCustomers.email, normalizedIdentifiers));
+                        conditions.push((0, drizzle_orm_1.inArray)(schema_1.bulkCustomers.mobilePhone, normalizedIdentifiers));
+                    }
+                    // Lookup customers by identifier (email or phone)
+                    const matchedCustomers = conditions.length > 0 ? await tx.query.bulkCustomers.findMany({
+                        where: (0, drizzle_orm_1.or)(...conditions)
+                    }) : [];
+                    // Create a lookup map for efficiency. 
+                    // Map both the exact value in DB AND its normalized version (though they should be same).
+                    const customerMap = new Map(); // normalizedIdentifier -> customerId
+                    matchedCustomers.forEach(c => {
+                        if (c.email) {
+                            customerMap.set(c.email.toLowerCase(), c.id);
+                            customerMap.set((0, phone_utils_1.normalizeIdentifier)(c.email), c.id);
+                        }
+                        if (c.mobilePhone) {
+                            customerMap.set(c.mobilePhone, c.id);
+                            customerMap.set((0, phone_utils_1.normalizeIdentifier)(c.mobilePhone), c.id);
+                        }
+                    });
+                    for (const row of data.contextualData) {
+                        const normId = (0, phone_utils_1.normalizeIdentifier)(row.identifier);
+                        const customerId = customerMap.get(normId) || customerMap.get(row.identifier.toLowerCase().trim());
+                        if (customerId) {
+                            finalCustomerIds.add(customerId);
+                            contextualInserts.push({
+                                groupId: newGroup.id,
+                                customerId,
+                                data: row.data
+                            });
+                        }
+                    }
+                }
+                if (finalCustomerIds.size > 0) {
+                    const memberInserts = Array.from(finalCustomerIds).map(customerId => ({
+                        groupId: newGroup.id,
+                        customerId,
+                    }));
+                    const BATCH_SIZE = 1000;
+                    for (let i = 0; i < memberInserts.length; i += BATCH_SIZE) {
+                        await tx.insert(schema_1.groupMembers).values(memberInserts.slice(i, i + BATCH_SIZE));
+                    }
+                }
+                if (contextualInserts.length > 0) {
+                    const BATCH_SIZE = 1000;
+                    for (let i = 0; i < contextualInserts.length; i += BATCH_SIZE) {
+                        await tx.insert(schema_1.groupContextualData).values(contextualInserts.slice(i, i + BATCH_SIZE));
+                    }
                 }
             }
             // 3. Handle Dynamic Group Rules
@@ -406,6 +494,7 @@ class WorkspacesService {
                     field: rule.field,
                     operator: rule.operator,
                     value: rule.value,
+                    logicGate: rule.logicGate || 'AND',
                 }));
                 await tx.insert(schema_1.groupRules).values(ruleInserts);
             }
@@ -435,24 +524,62 @@ class WorkspacesService {
             }
             else if (g.type === 'dynamic' && g.rules && g.rules.length > 0) {
                 // Dynamic rule live evaluation estimation
-                // For MVP, we build dynamic AND conditions.
                 const rulesArr = g.rules;
-                const conditions = rulesArr.map((r) => {
+                let querySql = (0, drizzle_orm_1.sql) `1=1`;
+                for (let i = 0; i < rulesArr.length; i++) {
+                    const r = rulesArr[i];
                     const column = schema_1.bulkCustomers[r.field];
-                    if (!column)
-                        return (0, drizzle_orm_1.sql) `1=1`; // Defensive fallback if field not found
-                    switch (r.operator) {
-                        case 'equals': return (0, drizzle_orm_1.eq)(column, r.value);
-                        case 'not_equals': return (0, drizzle_orm_1.sql) `${column} != ${r.value}`;
-                        case 'contains': return (0, drizzle_orm_1.sql) `${column} ILIKE ${'%' + r.value + '%'}`;
-                        case 'starts_with': return (0, drizzle_orm_1.sql) `${column} ILIKE ${r.value + '%'}`;
-                        default: return (0, drizzle_orm_1.sql) `1=1`;
+                    let condition = (0, drizzle_orm_1.sql) `1=1`;
+                    if (column) {
+                        switch (r.operator) {
+                            case 'equals':
+                                condition = (0, drizzle_orm_1.sql) `${column} = ${r.value}`;
+                                break;
+                            case 'not_equals':
+                                condition = (0, drizzle_orm_1.sql) `${column} != ${r.value}`;
+                                break;
+                            case 'contains':
+                                condition = (0, drizzle_orm_1.sql) `${column} ILIKE ${'%' + r.value + '%'}`;
+                                break;
+                            case 'starts_with':
+                                condition = (0, drizzle_orm_1.sql) `${column} ILIKE ${r.value + '%'}`;
+                                break;
+                        }
                     }
-                });
+                    else {
+                        // Support for Custom Fields (JSONB)
+                        const jsonColumn = (0, drizzle_orm_1.sql) `${schema_1.bulkCustomers.customFields}->>${r.field}`;
+                        switch (r.operator) {
+                            case 'equals':
+                                condition = (0, drizzle_orm_1.sql) `${jsonColumn} = ${r.value}`;
+                                break;
+                            case 'not_equals':
+                                condition = (0, drizzle_orm_1.sql) `${jsonColumn} != ${r.value}`;
+                                break;
+                            case 'contains':
+                                condition = (0, drizzle_orm_1.sql) `${jsonColumn} ILIKE ${'%' + r.value + '%'}`;
+                                break;
+                            case 'starts_with':
+                                condition = (0, drizzle_orm_1.sql) `${jsonColumn} ILIKE ${r.value + '%'}`;
+                                break;
+                        }
+                    }
+                    if (i === 0) {
+                        querySql = condition;
+                    }
+                    else {
+                        if (r.logicGate === 'OR') {
+                            querySql = (0, drizzle_orm_1.sql) `${querySql} OR ${condition}`;
+                        }
+                        else {
+                            querySql = (0, drizzle_orm_1.sql) `${querySql} AND ${condition}`;
+                        }
+                    }
+                }
                 const countResult = await this.db
                     .select({ count: (0, drizzle_orm_1.sql) `count(*)` })
                     .from(schema_1.bulkCustomers)
-                    .where((0, drizzle_orm_1.and)(...conditions));
+                    .where((0, drizzle_orm_1.sql) `(${querySql})`);
                 estimatedCount = Number(countResult[0]?.count || 0);
             }
             return {
@@ -464,6 +591,101 @@ class WorkspacesService {
             };
         }));
         return enrichedGroups;
+    }
+    async getGroup(workspaceId, groupId) {
+        const group = await this.db.query.groups.findFirst({
+            where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(schema_1.groups.id, groupId), (0, drizzle_orm_1.eq)(schema_1.groups.workspaceId, workspaceId)),
+            with: {
+                rules: true,
+                members: {
+                    with: {
+                        customer: true
+                    }
+                },
+            },
+        });
+        if (!group)
+            throw new Error('Group not found');
+        return {
+            ...group,
+            customerIds: group.members?.map((m) => m.customerId) || [],
+            customers: group.members?.map((m) => m.customer) || []
+        };
+    }
+    async updateGroup(workspaceId, groupId, data) {
+        return await this.db.transaction(async (tx) => {
+            // 1. Verify existence
+            const existingGroup = await tx.query.groups.findFirst({
+                where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(schema_1.groups.id, groupId), (0, drizzle_orm_1.eq)(schema_1.groups.workspaceId, workspaceId)),
+            });
+            if (!existingGroup)
+                throw new Error('Group not found');
+            // 2. Update base info
+            await tx.update(schema_1.groups)
+                .set({
+                name: data.name ?? existingGroup.name,
+                type: data.type ?? existingGroup.type,
+                updatedAt: new Date(),
+            })
+                .where((0, drizzle_orm_1.eq)(schema_1.groups.id, groupId));
+            // 3. If type changed or data provided, update members/rules
+            if (data.type || data.customerIds || data.rules) {
+                const finalType = data.type ?? existingGroup.type;
+                if (finalType === 'static') {
+                    // Clear rules if any
+                    await tx.delete(schema_1.groupRules).where((0, drizzle_orm_1.eq)(schema_1.groupRules.groupId, groupId));
+                    // Update members if provided
+                    if (data.customerIds) {
+                        await tx.delete(schema_1.groupMembers).where((0, drizzle_orm_1.eq)(schema_1.groupMembers.groupId, groupId));
+                        if (data.customerIds.length > 0) {
+                            const memberInserts = data.customerIds.map(customerId => ({
+                                groupId,
+                                customerId,
+                            }));
+                            const BATCH_SIZE = 1000;
+                            for (let i = 0; i < memberInserts.length; i += BATCH_SIZE) {
+                                await tx.insert(schema_1.groupMembers).values(memberInserts.slice(i, i + BATCH_SIZE));
+                            }
+                        }
+                    }
+                }
+                else {
+                    // Clear members if any
+                    await tx.delete(schema_1.groupMembers).where((0, drizzle_orm_1.eq)(schema_1.groupMembers.groupId, groupId));
+                    // Update rules if provided
+                    if (data.rules) {
+                        await tx.delete(schema_1.groupRules).where((0, drizzle_orm_1.eq)(schema_1.groupRules.groupId, groupId));
+                        if (data.rules.length > 0) {
+                            const ruleInserts = data.rules.map(rule => ({
+                                groupId,
+                                field: rule.field,
+                                operator: rule.operator,
+                                value: rule.value,
+                                logicGate: rule.logicGate || 'AND',
+                            }));
+                            await tx.insert(schema_1.groupRules).values(ruleInserts);
+                        }
+                    }
+                }
+            }
+            return { success: true };
+        });
+    }
+    async deleteGroup(workspaceId, groupId) {
+        return await this.db.transaction(async (tx) => {
+            // 1. Verify
+            const group = await tx.query.groups.findFirst({
+                where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(schema_1.groups.id, groupId), (0, drizzle_orm_1.eq)(schema_1.groups.workspaceId, workspaceId)),
+            });
+            if (!group)
+                throw new Error('Group not found');
+            // 2. Delete related data
+            await tx.delete(schema_1.groupMembers).where((0, drizzle_orm_1.eq)(schema_1.groupMembers.groupId, groupId));
+            await tx.delete(schema_1.groupRules).where((0, drizzle_orm_1.eq)(schema_1.groupRules.groupId, groupId));
+            // 3. Delete group
+            await tx.delete(schema_1.groups).where((0, drizzle_orm_1.eq)(schema_1.groups.id, groupId));
+            return { success: true };
+        });
     }
     async addGroupMembers(workspaceId, groupId, customerIds) {
         if (!customerIds || customerIds.length === 0)
@@ -607,6 +829,96 @@ class WorkspacesService {
             chartData,
             channelHealth
         };
+    }
+    async getWorkspaceAnniversaries(workspaceId) {
+        // Since getBulkCustomers returns all customers in the database (global pool),
+        // we follow the same pattern here to ensure all contacts are scanned for anniversaries.
+        const customers = await this.db.select({
+            id: schema_1.bulkCustomers.id,
+            firstName: schema_1.bulkCustomers.firstName,
+            surname: schema_1.bulkCustomers.surname,
+            fullName: schema_1.bulkCustomers.fullName,
+            dob: schema_1.bulkCustomers.dob,
+            dateOfIncorporation: schema_1.bulkCustomers.dateOfIncorporation,
+            mobilePhone: schema_1.bulkCustomers.mobilePhone,
+            email: schema_1.bulkCustomers.email
+        }).from(schema_1.bulkCustomers);
+        console.log(`[Anniversaries] Found ${customers.length} total customers to scan.`);
+        const today = new Date();
+        // Zero out time for accurate day difference
+        today.setHours(0, 0, 0, 0);
+        const results = {
+            inThreeDays: [],
+            upcoming: []
+        };
+        for (const customer of customers) {
+            const anniversaries = [
+                { type: 'Birthday', dateStr: customer.dob },
+                { type: 'Anniversary', dateStr: customer.dateOfIncorporation }
+            ];
+            for (const ann of anniversaries) {
+                if (!ann.dateStr)
+                    continue;
+                console.log(`[Anniversaries] Checking ${ann.type} for ${customer.fullName || customer.id}: ${ann.dateStr}`);
+                // Simple parser for YYYY-MM-DD or DD-MM-YYYY
+                let dateParts = [];
+                if (ann.dateStr.includes('-'))
+                    dateParts = ann.dateStr.split('-');
+                else if (ann.dateStr.includes('/'))
+                    dateParts = ann.dateStr.split('/');
+                if (dateParts.length < 2)
+                    continue;
+                let day, month;
+                // Try to guess format
+                if (dateParts[0].length === 4) { // YYYY-MM-DD
+                    month = parseInt(dateParts[1]);
+                    day = parseInt(dateParts[2]);
+                }
+                else if (dateParts[2]?.length === 4) { // DD-MM-YYYY
+                    day = parseInt(dateParts[0]);
+                    month = parseInt(dateParts[1]);
+                }
+                else {
+                    // Fallback
+                    day = parseInt(dateParts[0]);
+                    month = parseInt(dateParts[1]);
+                }
+                if (isNaN(day) || isNaN(month))
+                    continue;
+                if (month < 1 || month > 12 || day < 1 || day > 31)
+                    continue;
+                const eventThisYear = new Date(today.getFullYear(), month - 1, day);
+                eventThisYear.setHours(0, 0, 0, 0);
+                let diffTime = eventThisYear.getTime() - today.getTime();
+                let diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                // If event already passed this year, check next year
+                if (diffDays < 0) {
+                    const eventNextYear = new Date(today.getFullYear() + 1, month - 1, day);
+                    eventNextYear.setHours(0, 0, 0, 0);
+                    diffTime = eventNextYear.getTime() - today.getTime();
+                    diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                }
+                const item = {
+                    id: customer.id,
+                    name: customer.fullName || `${customer.firstName} ${customer.surname}`.trim() || customer.email || 'Unknown Contact',
+                    type: ann.type,
+                    daysUntil: diffDays,
+                    date: `${day}/${month}`,
+                    originalDate: ann.dateStr
+                };
+                if (diffDays === 3) {
+                    results.inThreeDays.push(item);
+                }
+                else if (diffDays >= 0 && diffDays <= 7) {
+                    results.upcoming.push(item);
+                }
+            }
+        }
+        return results;
+    }
+    async clearAllBulkCustomers() {
+        const result = await this.db.delete(schema_1.bulkCustomers).returning({ id: schema_1.bulkCustomers.id });
+        return { deleted: result.length };
     }
 }
 exports.WorkspacesService = WorkspacesService;

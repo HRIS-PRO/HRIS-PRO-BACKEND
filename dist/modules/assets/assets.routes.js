@@ -6,13 +6,18 @@ const assets_controller_1 = require("./assets.controller");
 async function assetsRoutes(app) {
     const assetsService = new assets_service_1.AssetsService(app.db);
     const assetsController = new assets_controller_1.AssetsController(assetsService);
-    app.addHook('onRequest', app.authenticate);
+    app.addHook('onRequest', app.checkAppRole('ASSET_TRACKER'));
     app.get('/', assetsController.getAllAssets.bind(assetsController));
     app.post('/', assetsController.createAsset.bind(assetsController));
+    app.post('/bulk-create', assetsController.bulkCreateAssets.bind(assetsController));
     app.put('/:id/accept', assetsController.acceptAsset.bind(assetsController));
+    app.post('/:id/send-hr', assetsController.sendHrConsent.bind(assetsController));
     app.put('/bulk-accept', assetsController.bulkAcceptAssets.bind(assetsController));
     app.put('/bulk-assign', assetsController.bulkAssignAssets.bind(assetsController));
     app.put('/:id/assign', assetsController.assignAsset.bind(assetsController));
     app.put('/:id/reassign', assetsController.reassignAsset.bind(assetsController));
     app.put('/:id/decommission', assetsController.decommissionAsset.bind(assetsController));
+    app.put('/:id/unassign', assetsController.unassignAsset.bind(assetsController));
+    app.put('/:id', assetsController.updateAsset.bind(assetsController));
+    app.get('/:id/lifecycle', assetsController.getLifecycleLogs.bind(assetsController));
 }

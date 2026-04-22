@@ -6,7 +6,7 @@ exports.createAssetSchema = zod_1.z.object({
     name: zod_1.z.string().min(1),
     category: zod_1.z.string().min(1),
     serialNumber: zod_1.z.string().optional(),
-    purchasePrice: zod_1.z.string().transform(Number),
+    purchasePrice: zod_1.z.union([zod_1.z.string(), zod_1.z.number()]).transform(String),
     purchaseDate: zod_1.z.string().min(1),
     condition: zod_1.z.string().min(1),
     location: zod_1.z.string().min(1),

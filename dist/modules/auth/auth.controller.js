@@ -7,9 +7,9 @@ class AuthController {
         this.authService = authService;
     }
     async login(request, reply) {
-        const { email, password } = request.body;
+        const { email, password, app } = request.body;
         try {
-            await this.authService.requestLoginOtp(email, password);
+            await this.authService.requestLoginOtp(email, password, app);
             return reply.send({ message: 'If credentials are correct, OTP sent.' });
         }
         catch (error) {
@@ -17,9 +17,9 @@ class AuthController {
         }
     }
     async verifyOtp(request, reply) {
-        const { email, otp } = request.body;
+        const { email, otp, app } = request.body;
         try {
-            const user = await this.authService.verifyLoginOtp(email, otp);
+            const user = await this.authService.verifyLoginOtp(email, otp, app);
             // Generate JWT
             const token = await reply.jwtSign({
                 id: user.id,
@@ -33,9 +33,9 @@ class AuthController {
         }
     }
     async directLogin(request, reply) {
-        const { email, password } = request.body;
+        const { email, password, app } = request.body;
         try {
-            const user = await this.authService.verifyDirectLogin(email, password);
+            const user = await this.authService.verifyDirectLogin(email, password, app);
             // Generate JWT
             const token = await reply.jwtSign({
                 id: user.id,

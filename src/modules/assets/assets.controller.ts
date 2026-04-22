@@ -62,6 +62,17 @@ export class AssetsController {
         }
     }
 
+    async getLifecycleLogs(request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) {
+        try {
+            const { id } = request.params;
+            const logs = await this.assetsService.getLifecycleLogs(id);
+            return reply.send(logs);
+        } catch (error: any) {
+            request.log.error(error);
+            return reply.status(500).send({ message: error.message || 'Failed to fetch lifecycle logs' });
+        }
+    }
+
     async acceptAsset(request: FastifyRequest<{ Params: { id: string }, Body?: { consentSignature?: string } }>, reply: FastifyReply) {
         try {
             const { id } = request.params;
@@ -71,6 +82,18 @@ export class AssetsController {
         } catch (error: any) {
             request.log.error(error);
             return reply.status(500).send({ message: error.message || 'Failed to accept asset' });
+        }
+    }
+
+    async sendHrConsent(request: FastifyRequest<{ Params: { id: string }, Body?: { pdfBase64?: string } }>, reply: FastifyReply) {
+        try {
+            const { id } = request.params;
+            const pdfBase64 = request.body?.pdfBase64;
+            const updatedAsset = await this.assetsService.sendHrConsent(id, pdfBase64);
+            return reply.send(updatedAsset);
+        } catch (error: any) {
+            request.log.error(error);
+            return reply.status(500).send({ message: error.message || 'Failed to dispatch HR consent mail' });
         }
     }
 

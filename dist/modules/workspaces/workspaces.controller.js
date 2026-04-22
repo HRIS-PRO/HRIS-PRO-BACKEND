@@ -156,11 +156,22 @@ class WorkspacesController {
             const page = parseInt(request.query.page || '1', 10);
             const limit = parseInt(request.query.limit || '20', 10);
             const search = request.query.search || '';
-            const result = await this.workspacesService.getBulkCustomers(page, limit, search);
+            const type = request.query.type || '';
+            const result = await this.workspacesService.getBulkCustomers(page, limit, search, type);
             return reply.send(result);
         }
         catch (error) {
             return reply.code(500).send({ message: error.message || 'Failed to fetch customers' });
+        }
+    }
+    async findCustomersByIdentifiers(request, reply) {
+        const { identifiers } = request.body;
+        try {
+            const customers = await this.workspacesService.findCustomersByIdentifiers(identifiers);
+            return reply.send(customers);
+        }
+        catch (error) {
+            return reply.code(400).send({ message: error.message || 'Failed to find customers' });
         }
     }
     async deleteBulkCustomers(request, reply) {
@@ -195,6 +206,37 @@ class WorkspacesController {
             return reply.code(500).send({ message: error.message || 'Failed to fetch groups' });
         }
     }
+    async getGroup(request, reply) {
+        const { workspaceId, groupId } = request.params;
+        try {
+            const group = await this.workspacesService.getGroup(workspaceId, groupId);
+            return reply.send(group);
+        }
+        catch (error) {
+            return reply.code(404).send({ message: error.message || 'Group not found' });
+        }
+    }
+    async updateGroup(request, reply) {
+        const { workspaceId, groupId } = request.params;
+        const data = request.body;
+        try {
+            const result = await this.workspacesService.updateGroup(workspaceId, groupId, data);
+            return reply.send(result);
+        }
+        catch (error) {
+            return reply.code(400).send({ message: error.message || 'Failed to update group' });
+        }
+    }
+    async deleteGroup(request, reply) {
+        const { workspaceId, groupId } = request.params;
+        try {
+            const result = await this.workspacesService.deleteGroup(workspaceId, groupId);
+            return reply.send(result);
+        }
+        catch (error) {
+            return reply.code(400).send({ message: error.message || 'Failed to delete group' });
+        }
+    }
     async addGroupMembers(request, reply) {
         const { workspaceId, groupId } = request.params;
         const { customerIds } = request.body;
@@ -214,6 +256,25 @@ class WorkspacesController {
         }
         catch (error) {
             return reply.code(500).send({ message: error.message || 'Failed to fetch dashboard stats' });
+        }
+    }
+    async getAnniversaries(request, reply) {
+        const workspaceId = request.params.id;
+        try {
+            const result = await this.workspacesService.getWorkspaceAnniversaries(workspaceId);
+            return reply.send(result);
+        }
+        catch (error) {
+            return reply.code(500).send({ message: error.message || 'Failed to fetch anniversaries' });
+        }
+    }
+    async clearAllBulkCustomers(request, reply) {
+        try {
+            const result = await this.workspacesService.clearAllBulkCustomers();
+            return reply.send(result);
+        }
+        catch (error) {
+            return reply.code(400).send({ message: error.message || 'Failed to clear customers' });
         }
     }
 }

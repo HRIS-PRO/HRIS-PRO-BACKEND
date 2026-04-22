@@ -1,5 +1,5 @@
 import { eq, inArray } from 'drizzle-orm';
-import { assets, users, assetActivities, assetLocations } from '../../db/schema';
+import { assets, users, assetActivities, assetLocations, departments, employees, assetLifecycleLogs } from '../../db/schema';
 import { AssetLocationsService } from '../asset-locations/asset-locations.service';
 import { supabase } from '../../utils/supabase';
 import { CreateAssetInput } from './assets.schema';
@@ -11,7 +11,38 @@ const assetLocationsService = new AssetLocationsService();
 export class AssetsService {
     constructor(private db: any) { }
 
-    async createAsset(data: CreateAssetInput, fileBuffer?: Buffer, fileName?: string, fileType?: string) {
+    private async logLifecycle(payload: {
+        assetId: string;
+        performedById?: string;
+        actionType: string;
+        previousAssigneeId?: string | null;
+        newAssigneeId?: string | null;
+        metadata?: any;
+    }) {
+        try {
+            let actorId = payload.performedById;
+            if (!actorId) {
+                // Fallback to first user in the DB (usually the system admin)
+                const sysUser = await this.db.query.users.findFirst();
+                actorId = sysUser?.id;
+            }
+
+            if (actorId) {
+                await this.db.insert(assetLifecycleLogs).values({
+                    assetId: payload.assetId,
+                    performedById: actorId,
+                    actionType: payload.actionType,
+                    previousAssigneeId: payload.previousAssigneeId || null,
+                    newAssigneeId: payload.newAssigneeId || null,
+                    metadata: payload.metadata || {}
+                });
+            }
+        } catch (e) {
+            console.error('Failed to log lifecycle event:', e);
+        }
+    }
+
+    async createAsset(data: CreateAssetInput, fileBuffer?: Buffer, fileName?: string, fileType?: string, actorId?: string) {
         let fileUrl: string | null = null;
 
         // Upload to Supabase if a file was provided
@@ -73,6 +104,14 @@ export class AssetsService {
             color: 'blue',
             roles: ['SUPER_ADMIN', 'ADMIN_USER', 'AUDITOR'],
             assetId: newAsset.id
+        });
+
+        await this.logLifecycle({
+            assetId: newAsset.id,
+            performedById: actorId,
+            actionType: 'CREATED',
+            newAssigneeId: cleanAssignedTo,
+            metadata: { newStatus: status, condition: data.condition }
         });
 
         if (status === 'PENDING' && cleanAssignedTo) {
@@ -241,18 +280,30 @@ export class AssetsService {
         }
     }
 
-    async assignAsset(id: string, data: { assignedTo: string; manager: string; department: string; location: string }) {
+    async assignAsset(id: string, data: { assignedTo: string; manager: string; department: string; location: string }, actorId?: string) {
         await this.ensureLocationExists(data.location);
+        const targetAsset = await this.db.query.assets.findFirst({ where: eq(assets.id, id) });
         const [updatedAsset] = await this.db.update(assets)
             .set({
                 assignedTo: data.assignedTo,
                 manager: data.manager,
                 department: data.department,
                 location: data.location,
-                status: 'PENDING'
+                status: 'PENDING',
+                consentSignature: null,
+                hrConsentSubmitted: false
             })
             .where(eq(assets.id, id))
             .returning();
+            
+        await this.logLifecycle({
+            assetId: updatedAsset.id,
+            performedById: actorId,
+            actionType: 'ASSIGNED',
+            previousAssigneeId: targetAsset?.assignedTo,
+            newAssigneeId: updatedAsset.assignedTo,
+            metadata: { oldStatus: targetAsset?.status, newStatus: updatedAsset.status }
+        });
 
         if (!updatedAsset) {
             throw new Error(`Asset with id ${id} not found`);
@@ -353,15 +404,20 @@ export class AssetsService {
         return updatedAssets.filter(Boolean);
     }
 
-    async reassignAsset(id: string, data: { assignedTo: string; manager: string; department: string; location: string }) {
+    async reassignAsset(id: string, data: { assignedTo: string; manager: string; department: string; location: string }, actorId?: string) {
         await this.ensureLocationExists(data.location);
+        // const [updatedAsset] = await this.db.update(assets)
+        //     .set({
+        const targetAsset = await this.db.query.assets.findFirst({ where: eq(assets.id, id) });
         const [updatedAsset] = await this.db.update(assets)
             .set({
                 assignedTo: data.assignedTo,
                 manager: data.manager,
                 department: data.department,
                 location: data.location,
-                status: 'PENDING'
+                status: 'PENDING',
+                consentSignature: null,
+                hrConsentSubmitted: false
             })
             .where(eq(assets.id, id))
             .returning();
@@ -369,6 +425,15 @@ export class AssetsService {
         if (!updatedAsset) {
             throw new Error(`Asset with id ${id} not found`);
         }
+
+        await this.logLifecycle({
+            assetId: updatedAsset.id,
+            performedById: actorId,
+            actionType: 'REASSIGNED',
+            previousAssigneeId: targetAsset?.assignedTo,
+            newAssigneeId: updatedAsset.assignedTo,
+            metadata: { oldStatus: targetAsset?.status, newStatus: updatedAsset.status }
+        });
 
         await this.db.insert(assetActivities).values({
             type: 'system',
@@ -410,6 +475,7 @@ export class AssetsService {
     }
 
     async decommissionAsset(id: string) {
+        const targetAsset = await this.db.query.assets.findFirst({ where: eq(assets.id, id) });
         const [updatedAsset] = await this.db.update(assets)
             .set({
                 status: 'DECOMMISSIONED',
@@ -421,6 +487,14 @@ export class AssetsService {
         if (!updatedAsset) {
             throw new Error(`Asset with id ${id} not found`);
         }
+
+        await this.logLifecycle({
+            assetId: updatedAsset.id,
+            actionType: 'DECOMMISSIONED',
+            previousAssigneeId: targetAsset?.assignedTo,
+            newAssigneeId: null,
+            metadata: { oldStatus: targetAsset?.status, newStatus: updatedAsset.status }
+        });
 
         await this.db.insert(assetActivities).values({
             type: 'system',
@@ -435,12 +509,15 @@ export class AssetsService {
         return updatedAsset;
     }
 
-    async unassignAsset(id: string) {
+    async unassignAsset(id: string, actorId?: string) {
+        const targetAsset = await this.db.query.assets.findFirst({ where: eq(assets.id, id) });
         const [updatedAsset] = await this.db.update(assets)
             .set({
                 assignedTo: null,
                 location: 'Main Warehouse',
-                status: 'IDLE'
+                status: 'IDLE',
+                consentSignature: null,
+                hrConsentSubmitted: false
             })
             .where(eq(assets.id, id))
             .returning();
@@ -448,6 +525,15 @@ export class AssetsService {
         if (!updatedAsset) {
             throw new Error(`Asset with id ${id} not found`);
         }
+
+        await this.logLifecycle({
+            assetId: updatedAsset.id,
+            performedById: actorId,
+            actionType: 'UNASSIGNED',
+            previousAssigneeId: targetAsset?.assignedTo,
+            newAssigneeId: null,
+            metadata: { oldStatus: targetAsset?.status, newStatus: updatedAsset.status }
+        });
 
         await this.db.insert(assetActivities).values({
             type: 'system',
@@ -462,27 +548,38 @@ export class AssetsService {
         return updatedAsset;
     }
 
-    async updateAsset(id: string, data: any) {
+    async updateAsset(id: string, data: any, actorId?: string) {
+        const targetAsset = await this.db.query.assets.findFirst({ where: eq(assets.id, id) });
+        const updateData = {
+            name: data.name,
+            category: data.category,
+            purchasePrice: data.purchasePrice?.toString(),
+            purchaseDate: data.purchaseDate,
+            condition: data.condition,
+            location: data.location,
+            department: data.department,
+            manager: data.manager,
+            serialNumber: data.serialNumber,
+            description: data.description,
+            status: data.status,
+        };
         const [updatedAsset] = await this.db.update(assets)
-            .set({
-                name: data.name,
-                category: data.category,
-                purchasePrice: data.purchasePrice?.toString(),
-                purchaseDate: data.purchaseDate,
-                condition: data.condition,
-                location: data.location,
-                department: data.department,
-                manager: data.manager,
-                serialNumber: data.serialNumber,
-                description: data.description,
-                status: data.status,
-            })
+            .set(updateData)
             .where(eq(assets.id, id))
             .returning();
 
         if (!updatedAsset) {
             throw new Error(`Asset with id ${id} not found`);
         }
+
+        await this.logLifecycle({
+            assetId: updatedAsset.id,
+            performedById: actorId,
+            actionType: 'UPDATED',
+            previousAssigneeId: targetAsset?.assignedTo,
+            newAssigneeId: updatedAsset.assignedTo,
+            metadata: { changes: updateData, oldStatus: targetAsset?.status, newStatus: updatedAsset.status }
+        });
 
         await this.db.insert(assetActivities).values({
             type: 'system',
@@ -497,7 +594,89 @@ export class AssetsService {
         return updatedAsset;
     }
 
+    async sendHrConsent(id: string, base64Pdf?: string) {
+        // Find asset
+        const asset = await this.db.query.assets.findFirst({
+            where: eq(assets.id, id)
+        });
+        if (!asset) throw new Error(`Asset with id ${id} not found`);
+
+        const assignee = await this.db.query.users.findFirst({
+            where: eq(users.id, asset.assignedTo)
+        });
+        
+        const hrDept = await this.db.query.departments.findFirst({
+            where: eq(departments.name, 'Operations & Human Resources')
+        });
+
+        let hrEmail = 'divinebuilds123@gmail.com';
+        // if (hrDept && hrDept.headId) {
+        //     const headEmp = await this.db.query.employees.findFirst({
+        //         where: eq(employees.id, hrDept.headId)
+        //     });
+        //     if (headEmp && headEmp.workEmail) {
+        //         hrEmail = headEmp.workEmail;
+        //     } else {
+        //         // Try treating headId as userId
+        //         const headUser = await this.db.query.users.findFirst({
+        //             where: eq(users.id, hrDept.headId)
+        //         });
+        //         if (headUser && headUser.email) {
+        //             hrEmail = headUser.email;
+        //         }
+        //     }
+        // }
+
+        const custodianName = assignee ? (assignee as any).name || (assignee as any).firstName + ' ' + (assignee as any).lastName || assignee.email : 'Unknown Employee';
+
+        const attachments = base64Pdf ? [{
+            content: base64Pdf,
+            mime_type: 'application/pdf',
+            name: `Asset_Custody_Agreement_${asset.id}.pdf`
+        }] : undefined;
+
+        await sendEmail(
+            hrEmail,
+            'Asset Consent Signed: ' + asset.name,
+            `
+                <h2>Asset Consent Signed</h2>
+                <p>Hello HR,</p>
+                <p><strong>${custodianName}</strong> has signed the consent form for the assigned asset: <strong>${asset.name}</strong> (${asset.id}).</p>
+                <p>You can view the signed document in the AssetTrackPro dashboard, or see the attached PDF generated directly from the frontend.</p>
+                <div style="text-align: center;">
+                    <a href="https://assets.noltfinance.com/consent/${asset.id}/document" class="btn">View Online Document &rarr;</a>
+                </div>
+                <br/>
+                <p>Best regards,<br/>AssetTrackPro System</p>
+            `,
+            'Asset Consent Executed',
+            'AssetTrackPro System',
+            undefined,
+            'AssetTrackPro',
+            attachments
+        ).catch(e => console.error("Email send failed for HR Consent:", e));
+
+        const [updatedAsset] = await this.db.update(assets)
+            .set({ hrConsentSubmitted: true })
+            .where(eq(assets.id, id))
+            .returning();
+
+        return updatedAsset;
+    }
+
     async getAllAssets() {
         return this.db.query.assets.findMany();
+    }
+
+    async getLifecycleLogs(assetId: string) {
+        return await this.db.query.assetLifecycleLogs.findMany({
+            where: eq(assetLifecycleLogs.assetId, assetId),
+            with: {
+                performedBy: { columns: { id: true, email: true } },
+                previousAssignee: { columns: { id: true, email: true } },
+                newAssignee: { columns: { id: true, email: true } },
+            },
+            orderBy: (logs: any, { desc }: any) => [desc(logs.createdAt)]
+        });
     }
 }

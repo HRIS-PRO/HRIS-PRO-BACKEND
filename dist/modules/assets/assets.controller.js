@@ -21,7 +21,6 @@ class AssetsController {
                 }
                 else {
                     try {
-                        // Assuming the frontend sends metadata stringified under a "data" field
                         if (part.fieldname === 'data') {
                             parsedData = JSON.parse(part.value);
                         }
@@ -30,7 +29,6 @@ class AssetsController {
                         }
                     }
                     catch (e) {
-                        // Fallback for simple key-value FormData
                         parsedData[part.fieldname] = part.value;
                     }
                 }
@@ -43,6 +41,20 @@ class AssetsController {
             return reply.status(500).send({ message: error.message || 'Failed to create asset' });
         }
     }
+    async bulkCreateAssets(request, reply) {
+        try {
+            const assetsData = request.body;
+            if (!Array.isArray(assetsData)) {
+                return reply.status(400).send({ message: 'Request body must be an array of assets' });
+            }
+            const newAssets = await this.assetsService.bulkCreateAssets(assetsData);
+            return reply.status(201).send(newAssets);
+        }
+        catch (error) {
+            request.log.error(error);
+            return reply.status(500).send({ message: error.message || 'Failed to bulk create assets' });
+        }
+    }
     async getAllAssets(request, reply) {
         try {
             const assets = await this.assetsService.getAllAssets();
@@ -53,15 +65,39 @@ class AssetsController {
             return reply.status(500).send({ message: error.message || 'Failed to fetch assets' });
         }
     }
+    async getLifecycleLogs(request, reply) {
+        try {
+            const { id } = request.params;
+            const logs = await this.assetsService.getLifecycleLogs(id);
+            return reply.send(logs);
+        }
+        catch (error) {
+            request.log.error(error);
+            return reply.status(500).send({ message: error.message || 'Failed to fetch lifecycle logs' });
+        }
+    }
     async acceptAsset(request, reply) {
         try {
             const { id } = request.params;
-            const updatedAsset = await this.assetsService.acceptAsset(id);
+            const consentSignature = request.body?.consentSignature;
+            const updatedAsset = await this.assetsService.acceptAsset(id, consentSignature);
             return reply.send(updatedAsset);
         }
         catch (error) {
             request.log.error(error);
             return reply.status(500).send({ message: error.message || 'Failed to accept asset' });
+        }
+    }
+    async sendHrConsent(request, reply) {
+        try {
+            const { id } = request.params;
+            const pdfBase64 = request.body?.pdfBase64;
+            const updatedAsset = await this.assetsService.sendHrConsent(id, pdfBase64);
+            return reply.send(updatedAsset);
+        }
+        catch (error) {
+            request.log.error(error);
+            return reply.status(500).send({ message: error.message || 'Failed to dispatch HR consent mail' });
         }
     }
     async bulkAcceptAssets(request, reply) {
@@ -82,8 +118,8 @@ class AssetsController {
         try {
             const { id } = request.params;
             const data = request.body;
-            if (!data.assignedTo || !data.manager || !data.department) {
-                return reply.status(400).send({ message: 'assignedTo, manager, and department are tightly required for assignment' });
+            if (!data.assignedTo || !data.manager || !data.department || !data.location) {
+                return reply.status(400).send({ message: 'assignedTo, manager, department, and location are required for assignment' });
             }
             const updatedAsset = await this.assetsService.assignAsset(id, data);
             return reply.send(updatedAsset);
@@ -99,8 +135,8 @@ class AssetsController {
             if (!assetIds || !Array.isArray(assetIds) || assetIds.length === 0) {
                 return reply.status(400).send({ message: 'assetIds must be a non-empty array of strings' });
             }
-            if (!data || !data.assignedTo || !data.manager || !data.department) {
-                return reply.status(400).send({ message: 'Assignment data (assignedTo, manager, department) is required' });
+            if (!data || !data.assignedTo || !data.manager || !data.department || !data.location) {
+                return reply.status(400).send({ message: 'Assignment data (assignedTo, manager, department, location) is required' });
             }
             const updatedAssets = await this.assetsService.bulkAssignAssets(assetIds, data);
             return reply.send(updatedAssets);
@@ -132,6 +168,29 @@ class AssetsController {
         catch (error) {
             request.log.error(error);
             return reply.status(500).send({ message: error.message || 'Failed to decommission asset' });
+        }
+    }
+    async unassignAsset(request, reply) {
+        try {
+            const { id } = request.params;
+            const updatedAsset = await this.assetsService.unassignAsset(id);
+            return reply.send(updatedAsset);
+        }
+        catch (error) {
+            request.log.error(error);
+            return reply.status(500).send({ message: error.message || 'Failed to unassign asset' });
+        }
+    }
+    async updateAsset(request, reply) {
+        try {
+            const { id } = request.params;
+            const data = request.body;
+            const updatedAsset = await this.assetsService.updateAsset(id, data);
+            return reply.send(updatedAsset);
+        }
+        catch (error) {
+            request.log.error(error);
+            return reply.status(500).send({ message: error.message || 'Failed to update asset' });
         }
     }
 }

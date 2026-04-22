@@ -6,6 +6,12 @@ const schema_1 = require("../../db/schema");
 const drizzle_orm_1 = require("drizzle-orm");
 class AuditsService {
     async createAuditCycle(input, creatorId) {
+        const existingActive = await db_1.db.query.auditCycles.findFirst({
+            where: (0, drizzle_orm_1.eq)(schema_1.auditCycles.status, "In Progress")
+        });
+        if (existingActive) {
+            throw new Error('An audit cycle is already in progress. Please complete it before starting a new one.');
+        }
         const displayId = `AUD-${new Date().getFullYear()}-` + Math.floor(Math.random() * 1000).toString().padStart(3, '0');
         const [cycle] = await db_1.db.insert(schema_1.auditCycles).values({
             displayId,

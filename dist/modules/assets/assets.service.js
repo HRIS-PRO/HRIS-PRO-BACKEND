@@ -1,17 +1,74 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.AssetsService = void 0;
 const drizzle_orm_1 = require("drizzle-orm");
 const schema_1 = require("../../db/schema");
+const asset_locations_service_1 = require("../asset-locations/asset-locations.service");
 const supabase_1 = require("../../utils/supabase");
 const zepto_1 = require("../shared/zepto");
-const schema_2 = require("../../db/schema");
+const assetLocationsService = new asset_locations_service_1.AssetLocationsService();
 class AssetsService {
     db;
     constructor(db) {
         this.db = db;
     }
-    async createAsset(data, fileBuffer, fileName, fileType) {
+    async logLifecycle(payload) {
+        try {
+            let actorId = payload.performedById;
+            if (!actorId) {
+                // Fallback to first user in the DB (usually the system admin)
+                const sysUser = await this.db.query.users.findFirst();
+                actorId = sysUser?.id;
+            }
+            if (actorId) {
+                await this.db.insert(schema_1.assetLifecycleLogs).values({
+                    assetId: payload.assetId,
+                    performedById: actorId,
+                    actionType: payload.actionType,
+                    previousAssigneeId: payload.previousAssigneeId || null,
+                    newAssigneeId: payload.newAssigneeId || null,
+                    metadata: payload.metadata || {}
+                });
+            }
+        }
+        catch (e) {
+            console.error('Failed to log lifecycle event:', e);
+        }
+    }
+    async createAsset(data, fileBuffer, fileName, fileType, actorId) {
         let fileUrl = null;
         // Upload to Supabase if a file was provided
         if (fileBuffer && fileName) {
@@ -36,14 +93,14 @@ class AssetsService {
         const cleanAssignedTo = data.assignedTo?.trim() || null;
         const cleanDescription = data.description?.trim() || 'n/a';
         const cleanSerialNumber = data.serialNumber?.trim() || null;
-        // Generate ID
-        const assetId = cleanSerialNumber ? cleanSerialNumber : `AST-${Math.floor(Math.random() * 10000)}`;
+        // Generate ID - Always use a unique internal ID
+        const assetId = `AST-${Math.floor(100000 + Math.random() * 900000)}`;
         // Save to Database
         const [newAsset] = await this.db.insert(schema_1.assets).values({
             id: assetId,
             name: data.name,
             category: data.category,
-            purchasePrice: Number(data.purchasePrice) || 0,
+            purchasePrice: data.purchasePrice?.toString() || "0",
             purchaseDate: data.purchaseDate,
             condition: data.condition,
             location: data.location || 'N/A',
@@ -55,11 +112,39 @@ class AssetsService {
             status,
             fileUrl,
         }).returning();
-        // Send Email if assigned
+        // Log Asset Creation
+        await this.db.insert(schema_1.assetActivities).values({
+            type: 'system',
+            title: 'New Hardware Provisioned',
+            desc: `${newAsset.name} was added to the inventory.`,
+            icon: 'inventory_2',
+            color: 'blue',
+            roles: ['SUPER_ADMIN', 'ADMIN_USER', 'AUDITOR'],
+            assetId: newAsset.id
+        });
+        await this.logLifecycle({
+            assetId: newAsset.id,
+            performedById: actorId,
+            actionType: 'CREATED',
+            newAssigneeId: cleanAssignedTo,
+            metadata: { newStatus: status, condition: data.condition }
+        });
         if (status === 'PENDING' && cleanAssignedTo) {
+            // Log Assignment Need
+            await this.db.insert(schema_1.assetActivities).values({
+                type: 'system',
+                title: 'Action Required',
+                desc: `Please accept the assignment for ${newAsset.name}.`,
+                icon: 'signature',
+                color: 'amber',
+                roles: ['USER', 'SUPER_ADMIN'],
+                targetUserId: cleanAssignedTo,
+                assetId: newAsset.id,
+                hasCTA: true
+            });
             // Fetch assignee email
             const assignee = await this.db.query.users.findFirst({
-                where: (0, drizzle_orm_1.eq)(schema_2.users.id, cleanAssignedTo),
+                where: (0, drizzle_orm_1.eq)(schema_1.users.id, cleanAssignedTo),
             });
             if (assignee) {
                 await (0, zepto_1.sendEmail)(assignee.email, 'New Asset Assignment Pending Review', `
@@ -67,22 +152,86 @@ class AssetsService {
                         <p>Hello,</p>
                         <p>You have been assigned a new asset: <strong>${data.name}</strong> (${assetId}).</p>
                         <p>Please log in to AssetTrackPro and accept or report this assignment from your dashboard.</p>
+                        <div style="text-align: center;">
+                            <a href="https://assets.noltfinance.com" class="btn">Open AssetTrackPro &rarr;</a>
+                        </div>
                         ${fileUrl ? `<p><a href="${fileUrl}">View Attached Image/Receipt</a></p>` : ''}
                         <br/>
                         <p>Best regards,<br/>AssetTrackPro System</p>
+
                     `).catch(e => console.error("Email send failed:", e));
             }
         }
         return newAsset;
     }
-    async acceptAsset(assetId) {
+    async bulkCreateAssets(assetsData) {
+        const results = [];
+        for (const data of assetsData) {
+            try {
+                const status = data.assignedTo && data.assignedTo.trim() !== '' ? 'PENDING' : 'IDLE';
+                const cleanAssignedTo = data.assignedTo?.trim() || null;
+                const cleanSerialNumber = data.serialNumber?.trim() || null;
+                // Generate a unique internal ID for each imported row
+                const assetId = `AST-B-${Math.floor(Math.random() * 16777215).toString(16).toUpperCase()}`;
+                const values = {
+                    id: assetId,
+                    name: data.name || 'Unnamed Asset',
+                    category: data.category || 'General',
+                    purchasePrice: data.purchasePrice?.toString() || "0",
+                    purchaseDate: data.purchaseDate || new Date().toISOString().split('T')[0],
+                    condition: data.condition || 'Good',
+                    location: data.location || 'N/A',
+                    department: data.department || 'N/A',
+                    manager: data.manager || 'N/A',
+                    serialNumber: cleanSerialNumber,
+                    description: data.description || 'Batch Import',
+                    assignedTo: cleanAssignedTo,
+                    status,
+                    fileUrl: null,
+                };
+                const [newAsset] = await this.db.insert(schema_1.assets).values(values).returning();
+                await this.db.insert(schema_1.assetActivities).values({
+                    type: 'system',
+                    title: 'Hardware Provisioned (Batch)',
+                    desc: `${newAsset.name} was added via bulk import.`,
+                    icon: 'inventory_2',
+                    color: 'indigo',
+                    roles: ['SUPER_ADMIN', 'ADMIN_USER', 'AUDITOR'],
+                    assetId: newAsset.id
+                });
+                results.push(newAsset);
+            }
+            catch (err) {
+                console.error("Bulk Import Row Error:", err);
+            }
+        }
+        return results;
+    }
+    async acceptAsset(assetId, consentSignature) {
         const [updatedAsset] = await this.db.update(schema_1.assets)
-            .set({ status: 'ACTIVE' })
+            .set({
+            status: 'ACTIVE',
+            ...(consentSignature && { consentSignature })
+        })
             .where((0, drizzle_orm_1.eq)(schema_1.assets.id, assetId))
             .returning();
         if (!updatedAsset) {
             throw new Error('Asset not found');
         }
+        await this.db.insert(schema_1.assetActivities).values({
+            type: 'system',
+            title: 'Equipment Accepted',
+            desc: `Assignment accepted for ${updatedAsset.name}.`,
+            icon: 'check_circle',
+            color: 'green',
+            roles: ['SUPER_ADMIN', 'USER'],
+            targetUserId: updatedAsset.assignedTo,
+            assetId: assetId
+        });
+        // Mark previous "Action Required" for this user & asset as read
+        await this.db.update(schema_1.assetActivities)
+            .set({ isRead: true })
+            .where((0, drizzle_orm_1.eq)(schema_1.assetActivities.assetId, assetId));
         return updatedAsset;
     }
     async bulkAcceptAssets(assetIds) {
@@ -95,57 +244,179 @@ class AssetsService {
                 .set({ status: 'ACTIVE' })
                 .where((0, drizzle_orm_1.eq)(schema_1.assets.id, id))
                 .returning();
+            if (updated) {
+                await this.db.insert(schema_1.assetActivities).values({
+                    type: 'system',
+                    title: 'Equipment Accepted',
+                    desc: `Assignment accepted for ${updated.name}.`,
+                    icon: 'check_circle',
+                    color: 'green',
+                    roles: ['SUPER_ADMIN', 'USER'],
+                    targetUserId: updated.assignedTo,
+                    assetId: id
+                });
+                await this.db.update(schema_1.assetActivities)
+                    .set({ isRead: true })
+                    .where((0, drizzle_orm_1.eq)(schema_1.assetActivities.assetId, id));
+            }
             return updated;
         }));
         return updatedAssets.filter(Boolean);
     }
-    async assignAsset(id, data) {
+    async ensureLocationExists(locationName) {
+        if (!locationName || locationName === 'Remote' || locationName === 'Unknown')
+            return;
+        const existing = await this.db.query.assetLocations.findFirst({
+            where: (0, drizzle_orm_1.eq)(schema_1.assetLocations.name, locationName)
+        });
+        if (!existing) {
+            await assetLocationsService.create({ name: locationName });
+        }
+    }
+    async assignAsset(id, data, actorId) {
+        await this.ensureLocationExists(data.location);
+        const targetAsset = await this.db.query.assets.findFirst({ where: (0, drizzle_orm_1.eq)(schema_1.assets.id, id) });
         const [updatedAsset] = await this.db.update(schema_1.assets)
             .set({
             assignedTo: data.assignedTo,
             manager: data.manager,
             department: data.department,
-            status: 'PENDING'
+            location: data.location,
+            status: 'PENDING',
+            consentSignature: null,
+            hrConsentSubmitted: false
         })
             .where((0, drizzle_orm_1.eq)(schema_1.assets.id, id))
             .returning();
+        await this.logLifecycle({
+            assetId: updatedAsset.id,
+            performedById: actorId,
+            actionType: 'ASSIGNED',
+            previousAssigneeId: targetAsset?.assignedTo,
+            newAssigneeId: updatedAsset.assignedTo,
+            metadata: { oldStatus: targetAsset?.status, newStatus: updatedAsset.status }
+        });
         if (!updatedAsset) {
             throw new Error(`Asset with id ${id} not found`);
         }
-        // Logic to dispatch consent email can go here in the future
+        await this.db.insert(schema_1.assetActivities).values({
+            type: 'system',
+            title: 'Action Required',
+            desc: `Please accept the assignment for ${updatedAsset.name}.`,
+            icon: 'signature',
+            color: 'amber',
+            roles: ['USER', 'SUPER_ADMIN'],
+            targetUserId: data.assignedTo,
+            assetId: id,
+            hasCTA: true
+        });
+        // Fetch assignee email
+        const assignee = await this.db.query.users.findFirst({
+            where: (0, drizzle_orm_1.eq)(schema_1.users.id, data.assignedTo),
+        });
+        if (assignee) {
+            await (0, zepto_1.sendEmail)(assignee.email, 'New Asset Assignment Pending Review', `
+                    <h2>Asset Assignment Review</h2>
+                    <p>Hello,</p>
+                    <p>You have been assigned an asset: <strong>${updatedAsset.name}</strong> (${updatedAsset.id}).</p>
+                    <p>Please log in to AssetTrackPro and review this assignment from your dashboard.</p>
+                    <div style="text-align: center;">
+                        <a href="https://assets.noltfinance.com" class="btn">Open AssetTrackPro &rarr;</a>
+                    </div>
+                    <br/>
+                    <p>Best regards,<br/>AssetTrackPro System</p>
+                `).catch(e => console.error("Email send failed for assignment:", e));
+        }
         return updatedAsset;
     }
     async bulkAssignAssets(assetIds, data) {
+        await this.ensureLocationExists(data.location);
         const updatedAssets = await Promise.all(assetIds.map(async (id) => {
             const [updated] = await this.db.update(schema_1.assets)
                 .set({
                 assignedTo: data.assignedTo,
                 manager: data.manager,
                 department: data.department,
+                location: data.location,
                 status: 'PENDING'
             })
                 .where((0, drizzle_orm_1.eq)(schema_1.assets.id, id))
                 .returning();
+            if (updated) {
+                await this.db.insert(schema_1.assetActivities).values({
+                    type: 'system',
+                    title: 'Action Required',
+                    desc: `Please accept the assignment for ${updated.name}.`,
+                    icon: 'signature',
+                    color: 'amber',
+                    roles: ['USER', 'SUPER_ADMIN'],
+                    targetUserId: data.assignedTo,
+                    assetId: id,
+                    hasCTA: true
+                });
+                const assignee = await this.db.query.users.findFirst({
+                    where: (0, drizzle_orm_1.eq)(schema_1.users.id, data.assignedTo),
+                });
+                if (assignee) {
+                    await (0, zepto_1.sendEmail)(assignee.email, 'New Asset Assignment Pending Review', `
+                                <h2>Asset Assignment Review</h2>
+                                <p>Hello,</p>
+                                <p>You have been assigned an asset: <strong>${updated.name}</strong> (${updated.id}).</p>
+                                <p>Please log in to AssetTrackPro and review this assignment from your dashboard.</p>
+                                <div style="text-align: center;">
+                                    <a href="https://assets.noltfinance.com" class="btn">Open AssetTrackPro &rarr;</a>
+                                </div>
+                                <br/>
+                                <p>Best regards,<br/>AssetTrackPro System</p>
+                            `).catch(e => console.error("Email send failed for bulk assignment:", e));
+                }
+            }
             return updated;
         }));
         return updatedAssets.filter(Boolean);
     }
-    async reassignAsset(id, data) {
+    async reassignAsset(id, data, actorId) {
+        await this.ensureLocationExists(data.location);
+        // const [updatedAsset] = await this.db.update(assets)
+        //     .set({
+        const targetAsset = await this.db.query.assets.findFirst({ where: (0, drizzle_orm_1.eq)(schema_1.assets.id, id) });
         const [updatedAsset] = await this.db.update(schema_1.assets)
             .set({
             assignedTo: data.assignedTo,
             manager: data.manager,
             department: data.department,
-            status: 'PENDING'
+            location: data.location,
+            status: 'PENDING',
+            consentSignature: null,
+            hrConsentSubmitted: false
         })
             .where((0, drizzle_orm_1.eq)(schema_1.assets.id, id))
             .returning();
         if (!updatedAsset) {
             throw new Error(`Asset with id ${id} not found`);
         }
+        await this.logLifecycle({
+            assetId: updatedAsset.id,
+            performedById: actorId,
+            actionType: 'REASSIGNED',
+            previousAssigneeId: targetAsset?.assignedTo,
+            newAssigneeId: updatedAsset.assignedTo,
+            metadata: { oldStatus: targetAsset?.status, newStatus: updatedAsset.status }
+        });
+        await this.db.insert(schema_1.assetActivities).values({
+            type: 'system',
+            title: 'Action Required',
+            desc: `Please accept the reassignment for ${updatedAsset.name}.`,
+            icon: 'signature',
+            color: 'amber',
+            roles: ['USER', 'SUPER_ADMIN'],
+            targetUserId: data.assignedTo,
+            assetId: id,
+            hasCTA: true
+        });
         // Fetch assignee email
         const assignee = await this.db.query.users.findFirst({
-            where: (0, drizzle_orm_1.eq)(schema_2.users.id, data.assignedTo),
+            where: (0, drizzle_orm_1.eq)(schema_1.users.id, data.assignedTo),
         });
         if (assignee) {
             await (0, zepto_1.sendEmail)(assignee.email, 'New Asset Reassignment Pending Review', `
@@ -153,13 +424,18 @@ class AssetsService {
                     <p>Hello,</p>
                     <p>You have been reassigned an existing asset: <strong>${updatedAsset.name}</strong> (${updatedAsset.id}).</p>
                     <p>Please log in to AssetTrackPro and accept or report this assignment from your dashboard.</p>
+                    <div style="text-align: center;">
+                        <a href="https://assets.noltfinance.com" class="btn">Open AssetTrackPro &rarr;</a>
+                    </div>
                     <br/>
                     <p>Best regards,<br/>AssetTrackPro System</p>
+
                 `).catch(e => console.error("Email send failed for reassignment:", e));
         }
         return updatedAsset;
     }
     async decommissionAsset(id) {
+        const targetAsset = await this.db.query.assets.findFirst({ where: (0, drizzle_orm_1.eq)(schema_1.assets.id, id) });
         const [updatedAsset] = await this.db.update(schema_1.assets)
             .set({
             status: 'DECOMMISSIONED',
@@ -170,10 +446,165 @@ class AssetsService {
         if (!updatedAsset) {
             throw new Error(`Asset with id ${id} not found`);
         }
+        await this.logLifecycle({
+            assetId: updatedAsset.id,
+            actionType: 'DECOMMISSIONED',
+            previousAssigneeId: targetAsset?.assignedTo,
+            newAssigneeId: null,
+            metadata: { oldStatus: targetAsset?.status, newStatus: updatedAsset.status }
+        });
+        await this.db.insert(schema_1.assetActivities).values({
+            type: 'system',
+            title: 'Hardware Decommissioned',
+            desc: `${updatedAsset.name} has been taken out of service.`,
+            icon: 'delete',
+            color: 'red',
+            roles: ['SUPER_ADMIN', 'ADMIN_USER', 'AUDITOR'],
+            assetId: id
+        });
+        return updatedAsset;
+    }
+    async unassignAsset(id, actorId) {
+        const targetAsset = await this.db.query.assets.findFirst({ where: (0, drizzle_orm_1.eq)(schema_1.assets.id, id) });
+        const [updatedAsset] = await this.db.update(schema_1.assets)
+            .set({
+            assignedTo: null,
+            location: 'Main Warehouse',
+            status: 'IDLE',
+            consentSignature: null,
+            hrConsentSubmitted: false
+        })
+            .where((0, drizzle_orm_1.eq)(schema_1.assets.id, id))
+            .returning();
+        if (!updatedAsset) {
+            throw new Error(`Asset with id ${id} not found`);
+        }
+        await this.logLifecycle({
+            assetId: updatedAsset.id,
+            performedById: actorId,
+            actionType: 'UNASSIGNED',
+            previousAssigneeId: targetAsset?.assignedTo,
+            newAssigneeId: null,
+            metadata: { oldStatus: targetAsset?.status, newStatus: updatedAsset.status }
+        });
+        await this.db.insert(schema_1.assetActivities).values({
+            type: 'system',
+            title: 'Asset Unassigned',
+            desc: `${updatedAsset.name} was returned to the inventory.`,
+            icon: 'restart_alt',
+            color: 'slate',
+            roles: ['SUPER_ADMIN', 'ADMIN_USER', 'AUDITOR'],
+            assetId: id
+        });
+        return updatedAsset;
+    }
+    async updateAsset(id, data, actorId) {
+        const targetAsset = await this.db.query.assets.findFirst({ where: (0, drizzle_orm_1.eq)(schema_1.assets.id, id) });
+        const updateData = {
+            name: data.name,
+            category: data.category,
+            purchasePrice: data.purchasePrice?.toString(),
+            purchaseDate: data.purchaseDate,
+            condition: data.condition,
+            location: data.location,
+            department: data.department,
+            manager: data.manager,
+            serialNumber: data.serialNumber,
+            description: data.description,
+            status: data.status,
+        };
+        const [updatedAsset] = await this.db.update(schema_1.assets)
+            .set(updateData)
+            .where((0, drizzle_orm_1.eq)(schema_1.assets.id, id))
+            .returning();
+        if (!updatedAsset) {
+            throw new Error(`Asset with id ${id} not found`);
+        }
+        await this.logLifecycle({
+            assetId: updatedAsset.id,
+            performedById: actorId,
+            actionType: 'UPDATED',
+            previousAssigneeId: targetAsset?.assignedTo,
+            newAssigneeId: updatedAsset.assignedTo,
+            metadata: { changes: updateData, oldStatus: targetAsset?.status, newStatus: updatedAsset.status }
+        });
+        await this.db.insert(schema_1.assetActivities).values({
+            type: 'system',
+            title: 'Hardware Profile Updated',
+            desc: `The profile for ${updatedAsset.name} was modified by an administrator.`,
+            icon: 'edit_square',
+            color: 'blue',
+            roles: ['SUPER_ADMIN', 'ADMIN_USER', 'AUDITOR'],
+            assetId: id
+        });
+        return updatedAsset;
+    }
+    async sendHrConsent(id, base64Pdf) {
+        // Find asset
+        const asset = await this.db.query.assets.findFirst({
+            where: (0, drizzle_orm_1.eq)(schema_1.assets.id, id)
+        });
+        if (!asset)
+            throw new Error(`Asset with id ${id} not found`);
+        const assignee = await this.db.query.users.findFirst({
+            where: (0, drizzle_orm_1.eq)(schema_1.users.id, asset.assignedTo)
+        });
+        const hrDept = await this.db.query.departments.findFirst({
+            where: (0, drizzle_orm_1.eq)(schema_1.departments.name, 'Operations & Human Resources')
+        });
+        let hrEmail = 'divinebuilds123@gmail.com';
+        // if (hrDept && hrDept.headId) {
+        //     const headEmp = await this.db.query.employees.findFirst({
+        //         where: eq(employees.id, hrDept.headId)
+        //     });
+        //     if (headEmp && headEmp.workEmail) {
+        //         hrEmail = headEmp.workEmail;
+        //     } else {
+        //         // Try treating headId as userId
+        //         const headUser = await this.db.query.users.findFirst({
+        //             where: eq(users.id, hrDept.headId)
+        //         });
+        //         if (headUser && headUser.email) {
+        //             hrEmail = headUser.email;
+        //         }
+        //     }
+        // }
+        const custodianName = assignee ? assignee.name || assignee.firstName + ' ' + assignee.lastName || assignee.email : 'Unknown Employee';
+        const attachments = base64Pdf ? [{
+                content: base64Pdf,
+                mime_type: 'application/pdf',
+                name: `Asset_Custody_Agreement_${asset.id}.pdf`
+            }] : undefined;
+        await (0, zepto_1.sendEmail)(hrEmail, 'Asset Consent Signed: ' + asset.name, `
+                <h2>Asset Consent Signed</h2>
+                <p>Hello HR,</p>
+                <p><strong>${custodianName}</strong> has signed the consent form for the assigned asset: <strong>${asset.name}</strong> (${asset.id}).</p>
+                <p>You can view the signed document in the AssetTrackPro dashboard, or see the attached PDF generated directly from the frontend.</p>
+                <div style="text-align: center;">
+                    <a href="https://assets.noltfinance.com/consent/${asset.id}/document" class="btn">View Online Document &rarr;</a>
+                </div>
+                <br/>
+                <p>Best regards,<br/>AssetTrackPro System</p>
+            `, 'Asset Consent Executed', 'AssetTrackPro System', undefined, 'AssetTrackPro', attachments).catch(e => console.error("Email send failed for HR Consent:", e));
+        const [updatedAsset] = await this.db.update(schema_1.assets)
+            .set({ hrConsentSubmitted: true })
+            .where((0, drizzle_orm_1.eq)(schema_1.assets.id, id))
+            .returning();
         return updatedAsset;
     }
     async getAllAssets() {
         return this.db.query.assets.findMany();
+    }
+    async getLifecycleLogs(assetId) {
+        return await this.db.query.assetLifecycleLogs.findMany({
+            where: (0, drizzle_orm_1.eq)((await Promise.resolve().then(() => __importStar(require('../../db/schema')))).assetLifecycleLogs.assetId, assetId),
+            with: {
+                performedBy: { columns: { id: true, firstName: true, lastName: true, name: true, email: true, avatarUrl: true } },
+                previousAssignee: { columns: { id: true, firstName: true, lastName: true, name: true, email: true, avatarUrl: true } },
+                newAssignee: { columns: { id: true, firstName: true, lastName: true, name: true, email: true, avatarUrl: true } },
+            },
+            orderBy: (logs, { desc }) => [desc(logs.createdAt)]
+        });
     }
 }
 exports.AssetsService = AssetsService;

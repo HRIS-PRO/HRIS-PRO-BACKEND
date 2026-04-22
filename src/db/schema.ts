@@ -151,13 +151,55 @@ export const assets = pgTable("ASSET", {
     description: text("description"),
     fileUrl: text("fileUrl"), // Supabase storage URL
     consentSignature: text("consentSignature"), // Base64 signature from consent
+    hrConsentSubmitted: boolean("hrConsentSubmitted").default(false),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
 });
 
-export const assetsRelations = relations(assets, ({ one }) => ({
+export const assetsRelations = relations(assets, ({ one, many }) => ({
     assignee: one(users, {
         fields: [assets.assignedTo],
+        references: [users.id],
+    }),
+    lifecycleLogs: many(assetLifecycleLogs),
+}));
+
+export const assetLifecycleLogs = pgTable("ASSET_LIFECYCLE_LOG", {
+    id: uuid("id").primaryKey().defaultRandom(),
+    assetId: text("assetId").notNull().references(() => assets.id, { onDelete: 'cascade' }),
+    performedById: uuid("performedById").notNull().references(() => users.id),
+    
+    // Core explicitly tracked fields
+    actionType: text("actionType").notNull(), // e.g. "CREATED", "ASSIGNED", "UNASSIGNED", "UPDATED", "MAINTENANCE"
+    previousAssigneeId: uuid("previousAssigneeId").references(() => users.id, { onDelete: 'set null' }),
+    newAssigneeId: uuid("newAssigneeId").references(() => users.id, { onDelete: 'set null' }),
+    
+    // Flexible object to catch arbitrary diffs (like changes in condition)
+    metadata: jsonb("metadata").$type<{
+       oldStatus?: string;
+       newStatus?: string;
+       notes?: string;
+       changes?: Record<string, { from: any, to: any }>;
+    }>(),
+    
+    createdAt: timestamp("createdAt").defaultNow().notNull()
+});
+
+export const assetLifecycleLogsRelations = relations(assetLifecycleLogs, ({ one }) => ({
+    asset: one(assets, {
+        fields: [assetLifecycleLogs.assetId],
+        references: [assets.id],
+    }),
+    performedBy: one(users, {
+        fields: [assetLifecycleLogs.performedById],
+        references: [users.id],
+    }),
+    previousAssignee: one(users, {
+        fields: [assetLifecycleLogs.previousAssigneeId],
+        references: [users.id],
+    }),
+    newAssignee: one(users, {
+        fields: [assetLifecycleLogs.newAssigneeId],
         references: [users.id],
     }),
 }));

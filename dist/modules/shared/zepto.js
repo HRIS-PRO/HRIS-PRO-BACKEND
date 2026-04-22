@@ -2,7 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.sendEmail = sendEmail;
 const env_1 = require("../../config/env");
-async function sendEmail(to, subject, htmlContent, preheader = '', fromName, fromEmail, appName = 'HRIS Pro') {
+async function sendEmail(to, subject, htmlContent, preheader = '', fromName, fromEmail, appName = 'HRIS Pro', attachments) {
     // Basic HTML Wrapper for professional look
     // The hidden div explicitly injects the preheader text right at the start of the body for Gmail/email clients
     const wrapper = `
@@ -17,6 +17,7 @@ async function sendEmail(to, subject, htmlContent, preheader = '', fromName, fro
             .content { padding: 30px; color: #333333; line-height: 1.6; }
             .footer { background: #f9fafb; padding: 15px; text-align: center; font-size: 12px; color: #666666; }
             .otp-code { font-size: 32px; font-weight: bold; letter-spacing: 5px; color: #4F46E5; text-align: center; margin: 20px 0; }
+            .btn { display: inline-block; background-color: #4F46E5; color: #ffffff !important; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 14px; margin: 20px 0; }
         </style>
     </head>
     <body>
@@ -52,6 +53,7 @@ async function sendEmail(to, subject, htmlContent, preheader = '', fromName, fro
         ],
         subject,
         htmlbody: wrapper,
+        ...(attachments && attachments.length > 0 ? { attachments } : {})
     };
     try {
         const response = await fetch('https://api.zeptomail.com/v1.1/email', {

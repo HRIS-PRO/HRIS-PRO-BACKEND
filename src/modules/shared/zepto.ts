@@ -4,6 +4,7 @@ interface EmailPayload {
     to: { email_address: { address: string; name: string } }[];
     subject: string;
     htmlbody: string;
+    attachments?: { content: string; mime_type: string; name: string }[];
 }
 
 export async function sendEmail(
@@ -13,7 +14,8 @@ export async function sendEmail(
     preheader: string = '',
     fromName?: string,
     fromEmail?: string,
-    appName: string = 'HRIS Pro'
+    appName: string = 'HRIS Pro',
+    attachments?: { content: string; mime_type: string; name: string }[]
 ) {
     // Basic HTML Wrapper for professional look
     // The hidden div explicitly injects the preheader text right at the start of the body for Gmail/email clients
@@ -67,6 +69,7 @@ export async function sendEmail(
         ],
         subject,
         htmlbody: wrapper,
+        ...(attachments && attachments.length > 0 ? { attachments } : {})
     };
 
     try {

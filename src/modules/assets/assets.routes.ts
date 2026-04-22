@@ -23,6 +23,11 @@ export async function assetsRoutes(app: FastifyInstance) {
         assetsController.acceptAsset.bind(assetsController)
     );
 
+    app.post(
+        '/:id/send-hr',
+        assetsController.sendHrConsent.bind(assetsController)
+    );
+
     app.put(
         '/bulk-accept',
         assetsController.bulkAcceptAssets.bind(assetsController)
@@ -55,5 +60,10 @@ export async function assetsRoutes(app: FastifyInstance) {
     app.put(
         '/:id',
         assetsController.updateAsset.bind(assetsController)
+    );
+
+    app.get(
+        '/:id/lifecycle',
+        assetsController.getLifecycleLogs.bind(assetsController)
     );
 }

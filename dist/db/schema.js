@@ -1,7 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.templatesRelations = exports.templates = exports.groupRulesRelations = exports.groupMembersRelations = exports.groupsRelations = exports.groupRules = exports.groupMembers = exports.groups = exports.ruleOperatorEnum = exports.groupTypeEnum = exports.bulkCustomersRelations = exports.bulkCustomers = exports.workspaceMembersRelations = exports.workspacesRelations = exports.workspaceMembers = exports.workspaces = exports.equipmentRequestsRelations = exports.equipmentRequests = exports.assetReportsRelations = exports.assetReports = exports.assetLocations = exports.assetCategories = exports.assetsRelations = exports.assets = exports.employeesRelations = exports.employees = exports.locations = exports.departmentsRelations = exports.departments = exports.userRolesRelations = exports.usersRelations = exports.userRoles = exports.users = exports.auditResultEnum = exports.auditCycleStatusEnum = exports.analyticsEventTypeEnum = exports.campaignCategoryEnum = exports.campaignStatusEnum = exports.campaignChannelEnum = exports.templateStatusEnum = exports.templateTypeEnum = exports.workspaceStatusEnum = exports.requestStatusEnum = exports.requestPriorityEnum = exports.reportStatusEnum = exports.assetStatusEnum = exports.locationStatusEnum = exports.departmentStatusEnum = exports.employeeStatusEnum = exports.appTypeEnum = void 0;
-exports.assetActivities = exports.auditVerificationsRelations = exports.auditCycleAuditorsRelations = exports.auditCyclesRelations = exports.auditVerifications = exports.auditCycleAuditors = exports.auditCycles = exports.campaignAnalyticsRelations = exports.campaignRecipientsRelations = exports.campaignsRelations = exports.campaignAnalytics = exports.campaignRecipients = exports.campaigns = void 0;
+exports.groupRulesRelations = exports.groupMembersRelations = exports.groupsRelations = exports.groupRules = exports.groupMembers = exports.groups = exports.ruleOperatorEnum = exports.groupTypeEnum = exports.bulkCustomersRelations = exports.bulkCustomers = exports.workspaceMembersRelations = exports.workspacesRelations = exports.workspaceMembers = exports.workspaces = exports.equipmentRequestsRelations = exports.equipmentRequests = exports.assetReportsRelations = exports.assetReports = exports.assetLocations = exports.assetCategories = exports.assetLifecycleLogsRelations = exports.assetLifecycleLogs = exports.assetsRelations = exports.assets = exports.employeesRelations = exports.employees = exports.locations = exports.departmentsRelations = exports.departments = exports.userRolesRelations = exports.usersRelations = exports.userRoles = exports.users = exports.auditResultEnum = exports.auditCycleStatusEnum = exports.analyticsEventTypeEnum = exports.campaignCategoryEnum = exports.campaignStatusEnum = exports.campaignChannelEnum = exports.templateStatusEnum = exports.templateTypeEnum = exports.workspaceStatusEnum = exports.requestStatusEnum = exports.requestPriorityEnum = exports.reportStatusEnum = exports.assetStatusEnum = exports.locationStatusEnum = exports.departmentStatusEnum = exports.employeeStatusEnum = exports.appTypeEnum = void 0;
+exports.groupContextualDataRelations = exports.groupContextualData = exports.campaignExternalDataRelations = exports.campaignExternalData = exports.assetActivities = exports.auditVerificationsRelations = exports.auditCycleAuditorsRelations = exports.auditCyclesRelations = exports.auditVerifications = exports.auditCycleAuditors = exports.auditCycles = exports.campaignAnalyticsRelations = exports.campaignRecipientsRelations = exports.campaignsRelations = exports.campaignAnalytics = exports.campaignRecipients = exports.campaigns = exports.templatesRelations = exports.templates = void 0;
 const pg_core_1 = require("drizzle-orm/pg-core");
 const drizzle_orm_1 = require("drizzle-orm");
 // Enums
@@ -131,18 +131,51 @@ exports.assets = (0, pg_core_1.pgTable)("ASSET", {
     manager: (0, pg_core_1.text)("manager"),
     status: (0, exports.assetStatusEnum)("status").default("IDLE").notNull(),
     purchaseDate: (0, pg_core_1.text)("purchaseDate").notNull(), // Storing as ISO string to match frontend
-    purchasePrice: (0, pg_core_1.integer)("purchasePrice").notNull(),
+    purchasePrice: (0, pg_core_1.text)("purchasePrice").notNull(),
     condition: (0, pg_core_1.text)("condition").notNull(),
     location: (0, pg_core_1.text)("location").notNull(),
     serialNumber: (0, pg_core_1.text)("serialNumber"),
     description: (0, pg_core_1.text)("description"),
     fileUrl: (0, pg_core_1.text)("fileUrl"), // Supabase storage URL
+    consentSignature: (0, pg_core_1.text)("consentSignature"), // Base64 signature from consent
+    hrConsentSubmitted: (0, pg_core_1.boolean)("hrConsentSubmitted").default(false),
     createdAt: (0, pg_core_1.timestamp)("createdAt").defaultNow().notNull(),
     updatedAt: (0, pg_core_1.timestamp)("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
 });
-exports.assetsRelations = (0, drizzle_orm_1.relations)(exports.assets, ({ one }) => ({
+exports.assetsRelations = (0, drizzle_orm_1.relations)(exports.assets, ({ one, many }) => ({
     assignee: one(exports.users, {
         fields: [exports.assets.assignedTo],
+        references: [exports.users.id],
+    }),
+    lifecycleLogs: many(exports.assetLifecycleLogs),
+}));
+exports.assetLifecycleLogs = (0, pg_core_1.pgTable)("ASSET_LIFECYCLE_LOG", {
+    id: (0, pg_core_1.uuid)("id").primaryKey().defaultRandom(),
+    assetId: (0, pg_core_1.text)("assetId").notNull().references(() => exports.assets.id, { onDelete: 'cascade' }),
+    performedById: (0, pg_core_1.uuid)("performedById").notNull().references(() => exports.users.id),
+    // Core explicitly tracked fields
+    actionType: (0, pg_core_1.text)("actionType").notNull(), // e.g. "CREATED", "ASSIGNED", "UNASSIGNED", "UPDATED", "MAINTENANCE"
+    previousAssigneeId: (0, pg_core_1.uuid)("previousAssigneeId").references(() => exports.users.id, { onDelete: 'set null' }),
+    newAssigneeId: (0, pg_core_1.uuid)("newAssigneeId").references(() => exports.users.id, { onDelete: 'set null' }),
+    // Flexible object to catch arbitrary diffs (like changes in condition)
+    metadata: (0, pg_core_1.jsonb)("metadata").$type(),
+    createdAt: (0, pg_core_1.timestamp)("createdAt").defaultNow().notNull()
+});
+exports.assetLifecycleLogsRelations = (0, drizzle_orm_1.relations)(exports.assetLifecycleLogs, ({ one }) => ({
+    asset: one(exports.assets, {
+        fields: [exports.assetLifecycleLogs.assetId],
+        references: [exports.assets.id],
+    }),
+    performedBy: one(exports.users, {
+        fields: [exports.assetLifecycleLogs.performedById],
+        references: [exports.users.id],
+    }),
+    previousAssignee: one(exports.users, {
+        fields: [exports.assetLifecycleLogs.previousAssigneeId],
+        references: [exports.users.id],
+    }),
+    newAssignee: one(exports.users, {
+        fields: [exports.assetLifecycleLogs.newAssigneeId],
         references: [exports.users.id],
     }),
 }));
@@ -277,11 +310,21 @@ exports.bulkCustomers = (0, pg_core_1.pgTable)("BULK_CUSTOMER", {
     idExpiryDate: (0, pg_core_1.text)("idExpiryDate"),
     isPep: (0, pg_core_1.text)("isPep"),
     pepDetails: (0, pg_core_1.text)("pepDetails"),
+    registrationNo: (0, pg_core_1.text)("registrationNo"),
+    dateOfIncorporation: (0, pg_core_1.text)("dateOfIncorporation"),
+    countryOfIncorporation: (0, pg_core_1.text)("countryOfIncorporation"),
+    stateOfIncorporation: (0, pg_core_1.text)("stateOfIncorporation"),
+    contactPerson: (0, pg_core_1.text)("contactPerson"),
+    accountOfficer: (0, pg_core_1.text)("accountOfficer"),
     externalCreatedAt: (0, pg_core_1.text)("externalCreatedAt"),
     customFields: (0, pg_core_1.jsonb)("customFields").default({}),
     createdAt: (0, pg_core_1.timestamp)("createdAt").defaultNow().notNull(),
     updatedAt: (0, pg_core_1.timestamp)("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
-});
+}, (table) => ({
+    mobileIdx: (0, pg_core_1.index)("bulk_customer_mobile_idx").on(table.mobilePhone),
+    emailIdx: (0, pg_core_1.index)("bulk_customer_email_idx").on(table.email),
+    typeIdx: (0, pg_core_1.index)("bulk_customer_type_idx").on(table.customerType),
+}));
 exports.bulkCustomersRelations = (0, drizzle_orm_1.relations)(exports.bulkCustomers, ({ many }) => ({
     groupMemberships: many(exports.groupMembers),
 }));
@@ -307,6 +350,7 @@ exports.groupRules = (0, pg_core_1.pgTable)('GROUP_RULE', {
     field: (0, pg_core_1.text)('field').notNull(),
     operator: (0, exports.ruleOperatorEnum)('operator').notNull(),
     value: (0, pg_core_1.text)('value').notNull(),
+    logicGate: (0, pg_core_1.text)('logicGate').default('AND').notNull(),
 });
 // --- RELATIONS ---
 exports.groupsRelations = (0, drizzle_orm_1.relations)(exports.groups, ({ many }) => ({
@@ -494,3 +538,39 @@ exports.assetActivities = (0, pg_core_1.pgTable)("ASSET_ACTIVITY", {
     isRead: (0, pg_core_1.boolean)("isRead").default(false),
     createdAt: (0, pg_core_1.timestamp)("createdAt").defaultNow().notNull()
 });
+// -----------------------------------------------------------------------------
+// Campaign External Contextual Data
+// -----------------------------------------------------------------------------
+exports.campaignExternalData = (0, pg_core_1.pgTable)("CAMPAIGN_EXTERNAL_DATA", {
+    id: (0, pg_core_1.uuid)("id").primaryKey().defaultRandom(),
+    campaignId: (0, pg_core_1.uuid)("campaignId").notNull().references(() => exports.campaigns.id, { onDelete: 'cascade' }),
+    identifier: (0, pg_core_1.text)("identifier").notNull(), // Normalized Phone or Email
+    data: (0, pg_core_1.jsonb)("data").notNull(), // { "Balance": "5000", "Days": "5" }
+    createdAt: (0, pg_core_1.timestamp)("createdAt").defaultNow().notNull(),
+});
+exports.campaignExternalDataRelations = (0, drizzle_orm_1.relations)(exports.campaignExternalData, ({ one }) => ({
+    campaign: one(exports.campaigns, {
+        fields: [exports.campaignExternalData.campaignId],
+        references: [exports.campaigns.id],
+    }),
+}));
+// -----------------------------------------------------------------------------
+// Group Contextual Data
+// -----------------------------------------------------------------------------
+exports.groupContextualData = (0, pg_core_1.pgTable)("GROUP_CONTEXTUAL_DATA", {
+    id: (0, pg_core_1.uuid)("id").primaryKey().defaultRandom(),
+    groupId: (0, pg_core_1.uuid)("groupId").notNull().references(() => exports.groups.id, { onDelete: 'cascade' }),
+    customerId: (0, pg_core_1.uuid)("customerId").notNull().references(() => exports.bulkCustomers.id, { onDelete: 'cascade' }),
+    data: (0, pg_core_1.jsonb)("data").notNull(), // { "Balance": "5000", "DueDate": "2024-12-01" }
+    createdAt: (0, pg_core_1.timestamp)("createdAt").defaultNow().notNull(),
+});
+exports.groupContextualDataRelations = (0, drizzle_orm_1.relations)(exports.groupContextualData, ({ one }) => ({
+    group: one(exports.groups, {
+        fields: [exports.groupContextualData.groupId],
+        references: [exports.groups.id],
+    }),
+    customer: one(exports.bulkCustomers, {
+        fields: [exports.groupContextualData.customerId],
+        references: [exports.bulkCustomers.id],
+    }),
+}));

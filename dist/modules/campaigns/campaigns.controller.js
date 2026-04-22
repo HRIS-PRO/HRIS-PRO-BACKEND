@@ -42,7 +42,10 @@ class CampaignsController {
         const userId = request.user.id;
         const data = request.body;
         try {
-            this.checkRole(request, ['Admin', 'Manager', 'Editor']);
+            const role = this.checkRole(request, ['Admin', 'Manager', 'Editor', 'User']);
+            if ((data.cycleConfig || data.anniversaryConfig) && role !== 'Admin' && role !== 'Manager') {
+                return reply.code(403).send({ message: 'Only Managers and Admins can create recurring campaigns' });
+            }
             const campaign = await this.campaignsService.createCampaign(workspaceId, userId, data);
             return reply.code(201).send(campaign);
         }
@@ -68,8 +71,12 @@ class CampaignsController {
     async updateCampaign(request, reply) {
         const { workspaceId, id } = request.params;
         try {
-            this.checkRole(request, ['Admin', 'Manager', 'Editor']);
-            const campaign = await this.campaignsService.updateCampaign(id, workspaceId, request.body);
+            const role = this.checkRole(request, ['Admin', 'Manager', 'Editor', 'User']);
+            const data = request.body;
+            if ((data.cycleConfig || data.anniversaryConfig) && role !== 'Admin' && role !== 'Manager') {
+                return reply.code(403).send({ message: 'Only Managers and Admins can manage recurring campaigns' });
+            }
+            const campaign = await this.campaignsService.updateCampaign(id, workspaceId, data);
             return reply.send(campaign);
         }
         catch (error) {
@@ -79,8 +86,8 @@ class CampaignsController {
     async submitCampaign(request, reply) {
         const { workspaceId, id } = request.params;
         try {
-            this.checkRole(request, ['Admin', 'Manager', 'Editor']);
-            const campaign = await this.campaignsService.submitCampaign(id, workspaceId, request.user?.id);
+            const role = this.checkRole(request, ['Admin', 'Manager', 'Editor', 'User']);
+            const campaign = await this.campaignsService.submitCampaign(id, workspaceId, request.user?.id, role);
             if (!campaign) {
                 return reply.code(400).send({ message: 'Campaign must be in DRAFT status to submit' });
             }
@@ -106,8 +113,8 @@ class CampaignsController {
         const userId = request.user.id;
         const { action } = request.body;
         try {
-            this.checkRole(request, ['Admin', 'Manager']);
-            const campaign = await this.campaignsService.approveCampaign(id, workspaceId, userId, action);
+            const role = this.checkRole(request, ['Admin', 'Manager', 'Editor']);
+            const campaign = await this.campaignsService.approveCampaign(id, workspaceId, userId, action, role);
             if (!campaign) {
                 return reply.code(400).send({ message: 'Campaign must be in PENDING status to approve/reject' });
             }
@@ -120,8 +127,8 @@ class CampaignsController {
     async deleteCampaign(request, reply) {
         const { workspaceId, id } = request.params;
         try {
-            this.checkRole(request, ['Admin', 'Manager']);
-            const campaign = await this.campaignsService.deleteCampaign(id, workspaceId);
+            const role = this.checkRole(request, ['Admin', 'Manager', 'Editor', 'User']);
+            const campaign = await this.campaignsService.deleteCampaign(id, workspaceId, request.user.id, role);
             if (!campaign) {
                 return reply.code(404).send({ message: 'Campaign not found' });
             }
@@ -129,6 +136,41 @@ class CampaignsController {
         }
         catch (error) {
             return reply.code(error.message.includes('Unauthorized') ? 403 : 400).send({ message: error.message });
+        }
+    }
+    async retryCampaign(request, reply) {
+        const { workspaceId, id } = request.params;
+        try {
+            this.checkRole(request, ['Admin', 'Manager', 'Editor']);
+            const result = await this.campaignsService.retryCampaign(id, workspaceId);
+            return reply.send(result);
+        }
+        catch (error) {
+            return reply.code(error.message.includes('Unauthorized') ? 403 : 400).send({ message: error.message });
+        }
+    }
+    async uploadExternalData(request, reply) {
+        const { workspaceId, id } = request.params;
+        const { rows } = request.body;
+        try {
+            this.checkRole(request, ['Admin', 'Manager', 'Editor']);
+            await this.campaignsService.processExternalData(id, rows);
+            return reply.send({ success: true, message: 'External contextual data processed successfully' });
+        }
+        catch (error) {
+            return reply.code(error.message.includes('Unauthorized') ? 403 : 400).send({ message: error.message });
+        }
+    }
+    async previewContextMatch(request, reply) {
+        const { workspaceId } = request.params;
+        const { groupIds, externalData } = request.body;
+        try {
+            this.checkRole(request, ['Admin', 'Manager', 'Editor', 'User']);
+            const result = await this.campaignsService.previewContextMatch(workspaceId, groupIds, externalData);
+            return reply.send(result);
+        }
+        catch (error) {
+            return reply.code(error.message.includes('Unauthorized') ? 403 : 500).send({ message: error.message });
         }
     }
 }

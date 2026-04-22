@@ -28,9 +28,12 @@ const campaigns_routes_1 = require("./modules/campaigns/campaigns.routes");
 const audits_routes_1 = __importDefault(require("./modules/audits/audits.routes"));
 const activities_routes_1 = __importDefault(require("./modules/activities/activities.routes"));
 const ws_routes_1 = require("./websocket/ws.routes");
+const drizzle_orm_1 = require("drizzle-orm");
+const schema_1 = require("./db/schema");
 const buildApp = async () => {
     const app = (0, fastify_1.default)({
         logger: true,
+        bodyLimit: 50 * 1024 * 1024, // 50MB
     }).withTypeProvider();
     // Core plugins
     await app.register(cors_1.default, {
@@ -57,6 +60,28 @@ const buildApp = async () => {
         catch (err) {
             reply.send(err);
         }
+    });
+    app.decorate('checkAppRole', (appName) => {
+        return async (request, reply) => {
+            if (!request.user) {
+                try {
+                    await request.jwtVerify();
+                }
+                catch (err) {
+                    return reply.code(401).send({ message: 'Unauthorized' });
+                }
+            }
+            const userId = request.user.id;
+            // Fresh check against database to catch revocations immediately
+            const roles = await app.db.query.userRoles.findMany({
+                where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(schema_1.userRoles.userId, userId), (0, drizzle_orm_1.eq)(schema_1.userRoles.app, appName))
+            });
+            if (roles.length === 0) {
+                return reply.code(403).send({
+                    message: `Access Denied: You do not have an active role for ${appName}.`
+                });
+            }
+        };
     });
     // Zod validation setup
     app.setValidatorCompiler(fastify_type_provider_zod_1.validatorCompiler);

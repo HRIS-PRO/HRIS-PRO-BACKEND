@@ -12,10 +12,15 @@ async function auditsRoutes(fastify) {
             body: audits_schema_1.createAuditCycleSchema
         }
     }, async (request, reply) => {
-        const user = request.user;
-        const body = request.body;
-        const cycle = await auditsService.createAuditCycle(body, user.id);
-        return reply.code(201).send(cycle);
+        try {
+            const user = request.user;
+            const body = request.body;
+            const cycle = await auditsService.createAuditCycle(body, user.id);
+            return reply.code(201).send(cycle);
+        }
+        catch (error) {
+            return reply.code(400).send({ message: error.message });
+        }
     });
     fastify.get('/', async (request, reply) => {
         const cycles = await auditsService.getAuditCycles();

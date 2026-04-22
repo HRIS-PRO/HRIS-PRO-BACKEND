@@ -16,8 +16,12 @@ async function wsRoutes(app) {
      */
     app.get('/ws', { websocket: true }, async (connection, request) => {
         let userId = null;
-        const socket = connection.socket;
+        const socket = connection?.socket || connection;
         try {
+            if (!socket || typeof socket.send !== 'function') {
+                app.log.error('WS Connection failed: No valid socket found on connection object');
+                return;
+            }
             const token = request.query.token;
             if (!token)
                 throw new Error('No token provided');
@@ -32,8 +36,11 @@ async function wsRoutes(app) {
             app.log.info(`WS connected: userId=${userId}, total=${wsManager_1.wsManager.connectedUserCount}`);
         }
         catch (err) {
-            socket.send(JSON.stringify({ type: 'connection:error', payload: { message: 'Unauthorized' } }));
-            socket.close();
+            app.log.error(`WS Auth Error: ${err.message}`);
+            if (socket && typeof socket.send === 'function' && socket.readyState === 1) {
+                socket.send(JSON.stringify({ type: 'connection:error', payload: { message: 'Unauthorized' } }));
+                socket.close();
+            }
         }
     });
 }

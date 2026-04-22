@@ -8,8 +8,10 @@ const zod_1 = __importDefault(require("zod"));
 exports.loginSchema = zod_1.default.object({
     email: zod_1.default.string().email(),
     password: zod_1.default.string().min(1),
+    app: zod_1.default.string().optional(),
 });
 exports.verifyOtpSchema = zod_1.default.object({
     email: zod_1.default.string().email(),
-    otp: zod_1.default.string().length(6), // Assuming 6-digit OTP
+    otp: zod_1.default.string().length(6),
+    app: zod_1.default.string().optional(),
 });

@@ -34,9 +34,15 @@ async function workspacesRoutes(app) {
     app.patch('/customers/:id', workspacesController.updateBulkCustomer.bind(workspacesController));
     app.get('/customers', workspacesController.getBulkCustomers.bind(workspacesController));
     app.delete('/customers/bulk', workspacesController.deleteBulkCustomers.bind(workspacesController));
+    app.delete('/customers/all', workspacesController.clearAllBulkCustomers.bind(workspacesController));
+    app.post('/customers/find-by-identifiers', workspacesController.findCustomersByIdentifiers.bind(workspacesController));
     // --- CONTACT GROUPS ---
     app.post('/:workspaceId/groups', workspacesController.createGroup.bind(workspacesController));
     app.get('/:workspaceId/groups', workspacesController.getGroups.bind(workspacesController));
+    app.get('/:workspaceId/groups/:groupId', workspacesController.getGroup.bind(workspacesController));
+    app.patch('/:workspaceId/groups/:groupId', workspacesController.updateGroup.bind(workspacesController));
+    app.delete('/:workspaceId/groups/:groupId', workspacesController.deleteGroup.bind(workspacesController));
     app.post('/:workspaceId/groups/:groupId/members', workspacesController.addGroupMembers.bind(workspacesController));
     app.get('/:workspaceId/dashboard-stats', workspacesController.getDashboardStats.bind(workspacesController));
+    app.get('/:id/anniversaries', workspacesController.getAnniversaries.bind(workspacesController));
 }

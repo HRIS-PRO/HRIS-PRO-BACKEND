@@ -8,7 +8,7 @@ const db_1 = require("../../db");
 async function campaignsRoutes(app) {
     const campaignsService = new campaigns_service_1.CampaignsService(db_1.db);
     const campaignsController = new campaigns_controller_1.CampaignsController(campaignsService);
-    app.addHook('preHandler', app.authenticate);
+    app.addHook('onRequest', app.checkAppRole('MSGSCALE_BULK'));
     // List campaigns in a workspace
     app.get('/:workspaceId', (request, reply) => campaignsController.getCampaigns(request, reply));
     // Get single campaign detail
@@ -39,4 +39,10 @@ async function campaignsRoutes(app) {
     }, (request, reply) => campaignsController.approveCampaign(request, reply));
     // Delete campaign
     app.delete('/:workspaceId/:id', (request, reply) => campaignsController.deleteCampaign(request, reply));
+    // Retry failed messages
+    app.post('/:workspaceId/:id/retry', (request, reply) => campaignsController.retryCampaign(request, reply));
+    // Upload campaign-specific contextual data (for manual variables)
+    app.post('/:workspaceId/:id/external-data', (request, reply) => campaignsController.uploadExternalData(request, reply));
+    // Preview match between groups and external data
+    app.post('/:workspaceId/preview-context-match', (request, reply) => campaignsController.previewContextMatch(request, reply));
 }
