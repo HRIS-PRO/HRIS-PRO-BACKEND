@@ -44,4 +44,9 @@ export default async function employeesRoutes(app: FastifyInstance) {
         '/:id/roles/:app',
         employeesController.revokeEmployeeRole.bind(employeesController)
     );
+
+    app.delete(
+        '/:id',
+        employeesController.deleteEmployee.bind(employeesController)
+    );
 }

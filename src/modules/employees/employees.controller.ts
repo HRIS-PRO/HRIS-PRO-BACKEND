@@ -79,4 +79,20 @@ export class EmployeesController {
             return reply.code(500).send({ message: 'Error revoking role' });
         }
     }
+
+    async deleteEmployee(
+        request: FastifyRequest<{ Params: { id: string } }>,
+        reply: FastifyReply
+    ) {
+        try {
+            const result = await this.employeesService.deleteEmployee(request.params.id);
+            return reply.send(result);
+        } catch (error: any) {
+            request.log.error(error);
+            if (error.message === 'Employee not found') {
+                return reply.code(404).send({ message: error.message });
+            }
+            return reply.code(500).send({ message: 'Error deleting employee' });
+        }
+    }
 }

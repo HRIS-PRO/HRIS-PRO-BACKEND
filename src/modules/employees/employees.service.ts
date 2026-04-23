@@ -200,4 +200,39 @@ export class EmployeesService {
             
         return { success: true, message: `Access revoked for ${appName}` };
     }
+
+    async deleteEmployee(employeeId: string) {
+        const employee = await this.db.query.employees.findFirst({
+            where: eq(employees.id, employeeId)
+        });
+
+        if (!employee) {
+            throw new Error('Employee not found');
+        }
+
+        if (employee.userId) {
+            // Delete userRoles first
+            await this.db.delete(userRoles).where(eq(userRoles.userId, employee.userId));
+            
+            // Delete employee record
+            await this.db.delete(employees).where(eq(employees.id, employeeId));
+
+            // Delete user
+            await this.db.delete(users).where(eq(users.id, employee.userId));
+        } else {
+            // Delete employee record
+            await this.db.delete(employees).where(eq(employees.id, employeeId));
+        }
+
+        // Update Department Staff Count
+        if (employee.departmentId) {
+            await this.db.update(departments)
+                .set({ 
+                    staffCount: sql`${departments.staffCount} - 1` 
+                })
+                .where(eq(departments.id, employee.departmentId));
+        }
+
+        return { success: true, message: 'Employee deleted successfully' };
+    }
 }
