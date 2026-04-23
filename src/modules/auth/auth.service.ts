@@ -1,5 +1,5 @@
 import { FastifyInstance } from 'fastify';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { users } from '../../db/schema';
 import { sendEmail } from '../shared/zepto';
 import crypto from 'crypto';
@@ -14,7 +14,7 @@ export class AuthService {
     async requestLoginOtp(email: string, password: string, app?: string) {
         // Find user by email
         const user = await this.db.query.users.findFirst({
-            where: eq(users.email, email),
+            where: eq(sql`lower(${users.email})`, email.toLowerCase()),
             with: {
                 roles: true
             }
@@ -95,7 +95,7 @@ export class AuthService {
     async verifyLoginOtp(email: string, otp: string, app?: string) {
         // Find user with roles
         const user = await this.db.query.users.findFirst({
-            where: eq(users.email, email),
+            where: eq(sql`lower(${users.email})`, email.toLowerCase()),
             with: {
                 roles: true,
                 employee: true,
@@ -137,7 +137,7 @@ export class AuthService {
     async verifyDirectLogin(email: string, password: string, app?: string) {
         // Find user by email
         const user = await this.db.query.users.findFirst({
-            where: eq(users.email, email.toLowerCase()),
+            where: eq(sql`lower(${users.email})`, email.toLowerCase()),
             with: {
                 roles: true,
                 employee: true,

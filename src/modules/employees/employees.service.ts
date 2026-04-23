@@ -52,7 +52,7 @@ export class EmployeesService {
         const passwordHash = await bcrypt.hash(password, 10);
 
         const [user] = await this.db.insert(users).values({
-            email: data.workEmail,
+            email: data.workEmail.toLowerCase(),
             passwordHash,
         }).returning();
 
