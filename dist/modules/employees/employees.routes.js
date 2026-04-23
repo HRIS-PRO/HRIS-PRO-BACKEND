@@ -21,4 +21,5 @@ async function employeesRoutes(app) {
         },
     }, employeesController.assignEmployeeRole.bind(employeesController));
     app.delete('/:id/roles/:app', employeesController.revokeEmployeeRole.bind(employeesController));
+    app.delete('/:id', employeesController.deleteEmployee.bind(employeesController));
 }

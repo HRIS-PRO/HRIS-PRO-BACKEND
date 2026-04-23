@@ -52,7 +52,7 @@ class EmployeesService {
         const password = this.generatePassword();
         const passwordHash = await bcryptjs_1.default.hash(password, 10);
         const [user] = await this.db.insert(schema_1.users).values({
-            email: data.workEmail,
+            email: data.workEmail.toLowerCase(),
             passwordHash,
         }).returning();
         // 2. Create Employee
@@ -172,6 +172,35 @@ class EmployeesService {
         await this.db.delete(schema_1.userRoles)
             .where((0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(schema_1.userRoles.userId, employee.userId), (0, drizzle_orm_1.eq)(schema_1.userRoles.app, appName)));
         return { success: true, message: `Access revoked for ${appName}` };
+    }
+    async deleteEmployee(employeeId) {
+        const employee = await this.db.query.employees.findFirst({
+            where: (0, drizzle_orm_1.eq)(schema_1.employees.id, employeeId)
+        });
+        if (!employee) {
+            throw new Error('Employee not found');
+        }
+        if (employee.userId) {
+            // Delete userRoles first
+            await this.db.delete(schema_1.userRoles).where((0, drizzle_orm_1.eq)(schema_1.userRoles.userId, employee.userId));
+            // Delete employee record
+            await this.db.delete(schema_1.employees).where((0, drizzle_orm_1.eq)(schema_1.employees.id, employeeId));
+            // Delete user
+            await this.db.delete(schema_1.users).where((0, drizzle_orm_1.eq)(schema_1.users.id, employee.userId));
+        }
+        else {
+            // Delete employee record
+            await this.db.delete(schema_1.employees).where((0, drizzle_orm_1.eq)(schema_1.employees.id, employeeId));
+        }
+        // Update Department Staff Count
+        if (employee.departmentId) {
+            await this.db.update(schema_1.departments)
+                .set({
+                staffCount: (0, drizzle_orm_1.sql) `${schema_1.departments.staffCount} - 1`
+            })
+                .where((0, drizzle_orm_1.eq)(schema_1.departments.id, employee.departmentId));
+        }
+        return { success: true, message: 'Employee deleted successfully' };
     }
 }
 exports.EmployeesService = EmployeesService;

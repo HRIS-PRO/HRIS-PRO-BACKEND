@@ -17,7 +17,7 @@ class AuthService {
     async requestLoginOtp(email, password, app) {
         // Find user by email
         const user = await this.db.query.users.findFirst({
-            where: (0, drizzle_orm_1.eq)(schema_1.users.email, email),
+            where: (0, drizzle_orm_1.eq)((0, drizzle_orm_1.sql) `lower(${schema_1.users.email})`, email.toLowerCase()),
             with: {
                 roles: true
             }
@@ -84,7 +84,7 @@ class AuthService {
     async verifyLoginOtp(email, otp, app) {
         // Find user with roles
         const user = await this.db.query.users.findFirst({
-            where: (0, drizzle_orm_1.eq)(schema_1.users.email, email),
+            where: (0, drizzle_orm_1.eq)((0, drizzle_orm_1.sql) `lower(${schema_1.users.email})`, email.toLowerCase()),
             with: {
                 roles: true,
                 employee: true,
@@ -119,7 +119,7 @@ class AuthService {
     async verifyDirectLogin(email, password, app) {
         // Find user by email
         const user = await this.db.query.users.findFirst({
-            where: (0, drizzle_orm_1.eq)(schema_1.users.email, email.toLowerCase()),
+            where: (0, drizzle_orm_1.eq)((0, drizzle_orm_1.sql) `lower(${schema_1.users.email})`, email.toLowerCase()),
             with: {
                 roles: true,
                 employee: true,

@@ -69,5 +69,18 @@ class EmployeesController {
             return reply.code(500).send({ message: 'Error revoking role' });
         }
     }
+    async deleteEmployee(request, reply) {
+        try {
+            const result = await this.employeesService.deleteEmployee(request.params.id);
+            return reply.send(result);
+        }
+        catch (error) {
+            request.log.error(error);
+            if (error.message === 'Employee not found') {
+                return reply.code(404).send({ message: error.message });
+            }
+            return reply.code(500).send({ message: 'Error deleting employee' });
+        }
+    }
 }
 exports.EmployeesController = EmployeesController;

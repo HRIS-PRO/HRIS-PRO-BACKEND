@@ -290,7 +290,7 @@ export class WorkspacesService {
         const mappedCustomers = customersData.map(data => {
             const customerType = data.customerType || data['Customer Type'] || (data['Registration No'] ? 'Corporate' : 'Individual');
             const mobilePhone = normalizePhoneNumber(data.mobilePhone || data['Mobile Phone'] || data['Phone No'] || '');
-            
+
             return {
                 customerType,
                 customerExternalId: String(data.customerExternalId || data['Customer External ID'] || data['Customer Id'] || ''),
@@ -402,11 +402,11 @@ export class WorkspacesService {
     async getBulkCustomers(page: number = 1, limit: number = 20, search: string = '', type: string = '') {
         const cleanSearch = search ? search.trim().replace(/\s+/g, ' ') : '';
         const searchPattern = cleanSearch ? `%${cleanSearch}%` : null;
-        
+
         const normalizedSearch = normalizeIdentifier(cleanSearch);
 
         const baseQueryConditions = and(
-            searchPattern 
+            searchPattern
                 ? or(
                     ilike(bulkCustomers.firstName, searchPattern),
                     ilike(bulkCustomers.surname, searchPattern),
@@ -427,7 +427,7 @@ export class WorkspacesService {
         const [totalCountResult] = await this.db.select({ count: sql`count(*)`.mapWith(Number) })
             .from(bulkCustomers)
             .where(baseQueryConditions);
-            
+
         const total = totalCountResult?.count || 0;
 
         let offset = (page - 1) * limit;
@@ -519,7 +519,7 @@ export class WorkspacesService {
                 if (data.contextualData && data.contextualData.length > 0) {
                     const originalIdentifiers = data.contextualData.map(d => String(d.identifier || '')).filter(id => id.trim() !== '' && id !== 'undefined');
                     const normalizedIdentifiers = originalIdentifiers.map(id => normalizeIdentifier(id)).filter(id => id.length > 0);
-                    
+
                     const conditions = [];
                     if (originalIdentifiers.length > 0) {
                         conditions.push(inArray(bulkCustomers.email, originalIdentifiers));
@@ -552,7 +552,7 @@ export class WorkspacesService {
                     for (const row of data.contextualData) {
                         const normId = normalizeIdentifier(row.identifier);
                         const customerId = customerMap.get(normId) || customerMap.get(row.identifier.toLowerCase().trim());
-                        
+
                         if (customerId) {
                             finalCustomerIds.add(customerId);
                             contextualInserts.push({
@@ -625,12 +625,12 @@ export class WorkspacesService {
                 // Dynamic rule live evaluation estimation
                 const rulesArr: any[] = (g as any).rules;
                 let querySql = sql`1=1`;
-                
+
                 for (let i = 0; i < rulesArr.length; i++) {
                     const r = rulesArr[i];
                     const column = (bulkCustomers as any)[r.field];
                     let condition = sql`1=1`;
-                    
+
                     if (column) {
                         switch (r.operator) {
                             case 'equals': condition = sql`${column} = ${r.value}`; break;
@@ -966,7 +966,7 @@ export class WorkspacesService {
         }).from(bulkCustomers);
 
         console.log(`[Anniversaries] Found ${customers.length} total customers to scan.`);
-        
+
         const today = new Date();
         // Zero out time for accurate day difference
         today.setHours(0, 0, 0, 0);
@@ -991,7 +991,7 @@ export class WorkspacesService {
                 let dateParts: string[] = [];
                 if (ann.dateStr.includes('-')) dateParts = ann.dateStr.split('-');
                 else if (ann.dateStr.includes('/')) dateParts = ann.dateStr.split('/');
-                
+
                 if (dateParts.length < 2) continue;
 
                 let day, month;
