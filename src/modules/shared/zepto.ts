@@ -95,7 +95,7 @@ export async function sendEmail(
         }
 
         const data = await response.json();
-        console.log('Email sent successfully:', data);
+        // console.log('Email sent successfully:', data);
     } catch (error) {
         console.error('Email sending failed:', error);
         // In production, we might want to throw or queue a retry.

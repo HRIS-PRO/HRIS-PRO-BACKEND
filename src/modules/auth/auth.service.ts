@@ -52,7 +52,7 @@ export class AuthService {
         const otp = crypto.randomInt(100000, 999999).toString();
 
         // Debug: Log OTP to console
-        console.log(`🔑 OTP for ${email}: ${otp}`);
+        // console.log(`🔑 OTP for ${email}: ${otp}`);
 
         // Hash OTP before storing
         const otpHash = crypto.createHash('sha256').update(otp).digest('hex');

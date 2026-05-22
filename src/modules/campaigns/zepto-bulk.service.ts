@@ -71,7 +71,7 @@ export async function sendBulkEmail(
         }
 
         const data = await response.json();
-        console.log('Bulk email sent successfully:', data);
+        // console.log('Bulk email sent successfully:', data);
     } catch (error) {
         console.error('Bulk email sending failed:', error);
         throw error;
