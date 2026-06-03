@@ -72,6 +72,7 @@ export async function sendSms(
         }
 
         console.log(`SMS sent successfully to ${to}. Message ID: ${data.message_id || 'N/A'}`);
+        console.log('Termii SMS API Full Response:', data);
         return data;
     } catch (error) {
         console.error(`Termii SMS Exception for ${to}:`, error);

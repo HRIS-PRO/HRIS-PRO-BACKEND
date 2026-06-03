@@ -3,7 +3,7 @@ import { connection } from './redis';
 
 export interface CampaignJobPayload {
     campaignId: string;
-    contactId: string;
+    contactId?: string | null;
     contactEmail?: string;
     contactPhone?: string;
     channel: 'EMAIL' | 'SMS' | 'WHATSAPP';

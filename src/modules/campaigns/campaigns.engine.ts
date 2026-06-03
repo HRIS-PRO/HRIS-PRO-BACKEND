@@ -8,6 +8,31 @@ export class CampaignsEngine {
     constructor(private dbClient: typeof db) { }
 
     async processScheduledCampaigns() {
+        // 1. Handle time-scheduled campaigns whose scheduledAt has passed
+        const scheduledCampaigns = await this.dbClient.query.campaigns.findMany({
+            where: eq(campaigns.status, 'SCHEDULED')
+        });
+
+        for (const campaign of scheduledCampaigns) {
+            try {
+                if (campaign.scheduledAt && new Date(campaign.scheduledAt) <= new Date()) {
+                    console.log(`[Scheduler] Campaign ${campaign.id} schedule is due. Executing...`);
+                    // Transition to APPROVED so executeCampaign can pick it up
+                    await this.dbClient.update(campaigns)
+                        .set({ status: 'APPROVED', updatedAt: new Date() })
+                        .where(eq(campaigns.id, campaign.id));
+
+                    // If it's a one-off scheduled campaign (not recurring), execute immediately
+                    if (!campaign.cycleConfig && !campaign.anniversaryConfig) {
+                        await this.executeCampaign(campaign.id);
+                    }
+                }
+            } catch (error) {
+                console.error(`[Scheduler] Failed to process scheduled campaign ${campaign.id}:`, error);
+            }
+        }
+
+        // 2. Handle recurring campaigns (cycle + anniversary) — these sit in APPROVED status
         const activeCampaigns = await this.dbClient.query.campaigns.findMany({
             where: eq(campaigns.status, 'APPROVED')
         });
@@ -20,7 +45,7 @@ export class CampaignsEngine {
                     await this.executeAnniversaryCampaign(campaign.id);
                 }
             } catch (error) {
-                console.error(`Failed to process scheduled campaign ${campaign.id}:`, error);
+                console.error(`[Scheduler] Failed to process recurring campaign ${campaign.id}:`, error);
             }
         }
     }
@@ -163,20 +188,41 @@ export class CampaignsEngine {
             .where(eq(campaigns.id, campaignId));
 
         try {
-            const contacts = targetCustomerIds && targetCustomerIds.length > 0
-                ? await this.dbClient.query.bulkCustomers.findMany({
-                    where: inArray(bulkCustomers.id, targetCustomerIds)
-                })
-                : await this.resolveCampaignContacts(campaign);
+            const content = campaign.content as any;
+            const manualRecipients: string[] = content?.manualRecipients || [];
 
-            if (contacts.length === 0) {
+            // Resolve group-based contacts (only if campaign has group recipients)
+            let contacts: any[] = [];
+            if (targetCustomerIds && targetCustomerIds.length > 0) {
+                contacts = await this.dbClient.query.bulkCustomers.findMany({
+                    where: inArray(bulkCustomers.id, targetCustomerIds)
+                });
+            } else if (manualRecipients.length === 0) {
+                // Only resolve groups if no manual recipients
+                contacts = await this.resolveCampaignContacts(campaign);
+            }
+
+            // Build synthetic contact objects for manual phone numbers
+            const manualContacts = manualRecipients.map((phone, idx) => ({
+                id: `manual_${campaignId}_${idx}`,
+                firstName: '',
+                surname: '',
+                fullName: '',
+                email: '',
+                mobilePhone: phone,
+                customFields: {},
+            }));
+
+            const allContacts = [...contacts, ...manualContacts];
+
+            if (allContacts.length === 0) {
                 await this.dbClient.update(campaigns)
                     .set({ status: 'COMPLETED', updatedAt: new Date() })
                     .where(eq(campaigns.id, campaignId));
                 return { sent: 0, message: "No recipients found" };
             }
 
-            const result = await this.dispatchToContacts(campaign, contacts);
+            const result = await this.dispatchToContacts(campaign, allContacts);
 
             await this.dbClient.update(campaigns)
                 .set({ status: 'COMPLETED', updatedAt: new Date() })
@@ -323,6 +369,7 @@ export class CampaignsEngine {
         let currentDelay = 0;
 
         for (const contact of contacts) {
+            const isManualContact = contact.id.startsWith('manual_');
             try {
                 // Merge external data if exists
                 const contactKeyPhone = normalizeIdentifier(contact.mobilePhone);
@@ -355,7 +402,7 @@ export class CampaignsEngine {
 
                 await addCampaignJob(jobId, {
                     campaignId: campaign.id,
-                    contactId: contact.id,
+                    contactId: isManualContact ? null : contact.id,
                     contactEmail: contact.email || undefined,
                     contactPhone: contact.mobilePhone || undefined,
                     channel: campaign.channel,
@@ -377,9 +424,9 @@ export class CampaignsEngine {
                 console.error(`Failed to dispatch job to queue for contact ${contact.id}:`, err);
                 await this.dbClient.insert(campaignAnalytics).values({
                     campaignId: campaign.id,
-                    contactId: contact.id,
+                    contactId: isManualContact ? null : contact.id,
                     eventType: 'FAILED',
-                    metadata: { error: "Failed to queue job: " + err.message },
+                    metadata: { error: "Failed to queue job: " + err.message, ...(isManualContact ? { manualPhone: contact.mobilePhone } : {}) },
                     occurredAt: new Date()
                 });
             }

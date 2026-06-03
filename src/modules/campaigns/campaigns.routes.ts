@@ -13,6 +13,9 @@ export async function campaignsRoutes(app: FastifyInstance) {
     // List campaigns in a workspace
     app.get('/:workspaceId', (request: any, reply) => campaignsController.getCampaigns(request, reply));
 
+    // Workspace analytics (aggregated)
+    app.get('/:workspaceId/analytics', (request: any, reply) => campaignsController.getAnalytics(request, reply));
+
     // Get single campaign detail
     app.get('/:workspaceId/:id', (request: any, reply) => campaignsController.getCampaign(request, reply));
 

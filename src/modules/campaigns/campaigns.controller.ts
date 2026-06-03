@@ -27,6 +27,19 @@ export class CampaignsController {
         }
     }
 
+    async getAnalytics(
+        request: FastifyRequest<{ Params: { workspaceId: string } }>,
+        reply: FastifyReply
+    ) {
+        const { workspaceId } = request.params;
+        try {
+            const analytics = await this.campaignsService.getAnalytics(workspaceId);
+            return reply.send(analytics);
+        } catch (error: any) {
+            return reply.code(500).send({ message: error.message || 'Failed to fetch analytics' });
+        }
+    }
+
     async getCampaign(
         request: FastifyRequest<{ Params: { workspaceId: string, id: string } }>,
         reply: FastifyReply
@@ -113,7 +126,7 @@ export class CampaignsController {
             const role = this.checkRole(request, ['Admin', 'Manager', 'Editor', 'User']);
             const campaign = await this.campaignsService.submitCampaign(id, workspaceId, (request.user as any)?.id as string, role);
             if (!campaign) {
-                return reply.code(400).send({ message: 'Campaign must be in DRAFT status to submit' });
+                return reply.code(400).send({ message: 'Campaign must be in DRAFT or REJECTED status to submit' });
             }
             return reply.send(campaign);
         } catch (error: any) {

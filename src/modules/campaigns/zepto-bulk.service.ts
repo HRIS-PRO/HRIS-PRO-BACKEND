@@ -58,7 +58,7 @@ export async function sendBulkEmail(
             body: JSON.stringify({
                 from: {
                     address: fromEmail || env.ZEPTO_FROM_EMAIL,
-                    name: fromName || "NOLT Finance"
+                    name: fromName || (fromEmail?.includes('noltinvestments') ? 'NOLT Investments' : 'NOLT Finance')
                 },
                 ...payload,
             }),
