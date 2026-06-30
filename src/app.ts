@@ -23,6 +23,7 @@ import templatesRoutes from './modules/templates/templates.routes';
 import { campaignsRoutes } from './modules/campaigns/campaigns.routes';
 import auditsRoutes from './modules/audits/audits.routes';
 import activitiesRoutes from './modules/activities/activities.routes';
+import { publicRoutes } from './modules/public/public.routes';
 import { wsRoutes } from './websocket/ws.routes';
 
 import { eq, and } from 'drizzle-orm';
@@ -125,6 +126,7 @@ const buildApp = async (): Promise<FastifyInstance> => {
     await app.register(campaignsRoutes, { prefix: '/campaigns' });
     await app.register(auditsRoutes, { prefix: '/audits' });
     await app.register(activitiesRoutes, { prefix: '/activities' });
+    await app.register(publicRoutes, { prefix: '/public' });
 
     return app;
 };

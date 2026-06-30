@@ -11,6 +11,21 @@ const assetLocationsService = new AssetLocationsService();
 export class AssetsService {
     constructor(private db: any) { }
 
+    // Generates the next human-facing sequential asset number (AST-NF-00001, AST-NF-00002, ...).
+    // Pass `offset` when allocating several numbers in one batch (e.g. bulk import) so they don't collide.
+    private async generateAssetNumber(offset = 0): Promise<string> {
+        const rows = await this.db.select({ n: assets.assetNumber }).from(assets);
+        let max = 0;
+        for (const r of rows) {
+            const m = /^AST-NF-(\d+)$/.exec(r.n || '');
+            if (m) {
+                const val = parseInt(m[1], 10);
+                if (val > max) max = val;
+            }
+        }
+        return `AST-NF-${String(max + 1 + offset).padStart(5, '0')}`;
+    }
+
     private async logLifecycle(payload: {
         assetId: string;
         performedById?: string;
@@ -76,10 +91,13 @@ export class AssetsService {
 
         // Generate ID - Always use a unique internal ID
         const assetId = `AST-${Math.floor(100000 + Math.random() * 900000)}`;
+        // Generate the human-facing sequential display number
+        const assetNumber = await this.generateAssetNumber();
 
         // Save to Database
         const [newAsset] = await this.db.insert(assets).values({
             id: assetId,
+            assetNumber,
             name: data.name,
             category: data.category,
             purchasePrice: data.purchasePrice?.toString() || "0",
@@ -159,6 +177,7 @@ export class AssetsService {
 
     async bulkCreateAssets(assetsData: any[]) {
         const results = [];
+        let offset = 0;
         for (const data of assetsData) {
             try {
                 const status = data.assignedTo && data.assignedTo.trim() !== '' ? 'PENDING' : 'IDLE';
@@ -166,9 +185,13 @@ export class AssetsService {
                 const cleanSerialNumber = data.serialNumber?.trim() || null;
                 // Generate a unique internal ID for each imported row
                 const assetId = `AST-B-${Math.floor(Math.random() * 16777215).toString(16).toUpperCase()}`;
+                // Allocate the next sequential display number for this batch row
+                const assetNumber = await this.generateAssetNumber(offset);
+                offset++;
 
                 const values = {
                     id: assetId,
+                    assetNumber,
                     name: data.name || 'Unnamed Asset',
                     category: data.category || 'General',
                     purchasePrice: data.purchasePrice?.toString() || "0",
@@ -438,7 +461,7 @@ export class AssetsService {
         await this.db.insert(assetActivities).values({
             type: 'system',
             title: 'Action Required',
-            desc: `Please accept the reassignment for ${updatedAsset.name}.`,
+            desc: `Please accept the assignment of ${updatedAsset.name}.`,
             icon: 'signature',
             color: 'amber',
             roles: ['USER', 'SUPER_ADMIN'],
@@ -666,6 +689,44 @@ export class AssetsService {
 
     async getAllAssets() {
         return this.db.query.assets.findMany();
+    }
+
+    // Public, read-only snapshot for the QR scan page. No auth required.
+    // Exposes only basic, non-sensitive fields plus the resolved custodian name.
+    async getPublicAssetInfo(id: string) {
+        const asset = await this.db.query.assets.findFirst({
+            where: eq(assets.id, id)
+        });
+        if (!asset) return null;
+
+        let custodianName: string | null = null;
+        if (asset.assignedTo) {
+            const employee = await this.db.query.employees.findFirst({
+                where: eq(employees.userId, asset.assignedTo)
+            });
+            if (employee) {
+                custodianName = `${employee.firstName} ${employee.surname}`.trim();
+            } else {
+                const user = await this.db.query.users.findFirst({
+                    where: eq(users.id, asset.assignedTo)
+                });
+                custodianName = user?.email || null;
+            }
+        }
+
+        return {
+            id: asset.id,
+            assetNumber: asset.assetNumber,
+            name: asset.name,
+            category: asset.category,
+            serialNumber: asset.serialNumber,
+            status: asset.status,
+            location: asset.location,
+            department: asset.department,
+            condition: asset.condition,
+            purchaseDate: asset.purchaseDate,
+            custodianName,
+        };
     }
 
     async getLifecycleLogs(assetId: string) {

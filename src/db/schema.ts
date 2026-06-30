@@ -136,7 +136,8 @@ export const employeesRelations = relations(employees, ({ one }) => ({
 // -----------------------------------------------------------------------------
 
 export const assets = pgTable("ASSET", {
-    id: text("id").primaryKey(), // Using custom ID logic (e.g. AST-XXXX)
+    id: text("id").primaryKey(), // Internal immutable ID (e.g. AST-XXXX). Referenced by lifecycle logs/reports/audits.
+    assetNumber: text("assetNumber").unique(), // Human-facing display number, sequential (e.g. AST-NF-00001)
     name: text("name").notNull(),
     category: text("category").notNull(),
     assignedTo: uuid("assignedTo").references(() => users.id), // Nullable for unassigned
