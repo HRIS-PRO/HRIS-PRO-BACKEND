@@ -66,4 +66,9 @@ export async function assetsRoutes(app: FastifyInstance) {
         '/:id/lifecycle',
         assetsController.getLifecycleLogs.bind(assetsController)
     );
+
+    app.post(
+        '/:id/lifecycle',
+        assetsController.addManualLog.bind(assetsController)
+    );
 }

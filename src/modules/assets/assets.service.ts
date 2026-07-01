@@ -740,4 +740,19 @@ export class AssetsService {
             orderBy: (logs: any, { desc }: any) => [desc(logs.createdAt)]
         });
     }
+
+    // Records a free-text audit-log entry added manually by an admin/auditor.
+    async addManualLog(assetId: string, actorId: string | undefined, note: string) {
+        const asset = await this.db.query.assets.findFirst({ where: eq(assets.id, assetId) });
+        if (!asset) throw new Error('Asset not found');
+
+        await this.logLifecycle({
+            assetId,
+            performedById: actorId,
+            actionType: 'NOTE',
+            metadata: { note }
+        });
+
+        return this.getLifecycleLogs(assetId);
+    }
 }

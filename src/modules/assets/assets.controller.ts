@@ -73,6 +73,22 @@ export class AssetsController {
         }
     }
 
+    async addManualLog(request: FastifyRequest<{ Params: { id: string }, Body: { note?: string } }>, reply: FastifyReply) {
+        try {
+            const { id } = request.params;
+            const note = request.body?.note?.trim();
+            if (!note) {
+                return reply.status(400).send({ message: 'Note text is required' });
+            }
+            const actorId = (request.user as any)?.id;
+            const logs = await this.assetsService.addManualLog(id, actorId, note);
+            return reply.status(201).send(logs);
+        } catch (error: any) {
+            request.log.error(error);
+            return reply.status(500).send({ message: error.message || 'Failed to add log entry' });
+        }
+    }
+
     async acceptAsset(request: FastifyRequest<{ Params: { id: string }, Body?: { consentSignature?: string } }>, reply: FastifyReply) {
         try {
             const { id } = request.params;
