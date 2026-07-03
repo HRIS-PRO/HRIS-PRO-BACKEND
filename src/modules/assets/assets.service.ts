@@ -68,7 +68,7 @@ export class AssetsService {
 
         if (error) {
             console.error("Supabase Upload Error:", error);
-            throw new Error("Failed to upload asset receipt/image");
+            throw new Error(`Failed to upload asset image to storage: ${error.message || 'storage service unreachable'}`);
         }
 
         const { data: publicUrlData } = supabase.storage
