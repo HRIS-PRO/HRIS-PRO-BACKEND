@@ -202,8 +202,35 @@ export class AssetsController {
     async updateAsset(request: FastifyRequest<{ Params: { id: string }, Body: any }>, reply: FastifyReply) {
         try {
             const { id } = request.params;
-            const data = request.body;
-            const updatedAsset = await this.assetsService.updateAsset(id, data);
+            let data: any = {};
+            let fileBuffer: Buffer | undefined;
+            let fileName: string | undefined;
+            let fileType: string | undefined;
+
+            if (request.isMultipart()) {
+                for await (const part of request.parts()) {
+                    if (part.type === 'file') {
+                        fileBuffer = await part.toBuffer();
+                        fileName = part.filename;
+                        fileType = part.mimetype;
+                    } else {
+                        try {
+                            if (part.fieldname === 'data') {
+                                data = JSON.parse(part.value as string);
+                            } else {
+                                data[part.fieldname] = part.value;
+                            }
+                        } catch (e) {
+                            data[part.fieldname] = part.value;
+                        }
+                    }
+                }
+            } else {
+                data = request.body;
+            }
+
+            const actorId = (request.user as any)?.id;
+            const updatedAsset = await this.assetsService.updateAsset(id, data, actorId, fileBuffer, fileName, fileType);
             return reply.send(updatedAsset);
         } catch (error: any) {
             request.log.error(error);

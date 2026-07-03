@@ -57,28 +57,32 @@ export class AssetsService {
         }
     }
 
+    // Uploads an asset image/receipt to Supabase storage and returns its public URL.
+    private async uploadAssetFile(fileBuffer: Buffer, fileName: string, fileType?: string): Promise<string> {
+        const uniqueName = `${Date.now()}-${fileName}`;
+        const { error } = await supabase.storage
+            .from('AssetTracker')
+            .upload(uniqueName, fileBuffer, {
+                contentType: fileType,
+            });
+
+        if (error) {
+            console.error("Supabase Upload Error:", error);
+            throw new Error("Failed to upload asset receipt/image");
+        }
+
+        const { data: publicUrlData } = supabase.storage
+            .from('AssetTracker')
+            .getPublicUrl(uniqueName);
+
+        return publicUrlData.publicUrl;
+    }
+
     async createAsset(data: CreateAssetInput, fileBuffer?: Buffer, fileName?: string, fileType?: string, actorId?: string) {
         let fileUrl: string | null = null;
 
-        // Upload to Supabase if a file was provided
         if (fileBuffer && fileName) {
-            const uniqueName = `${Date.now()}-${fileName}`;
-            const { data: uploadData, error } = await supabase.storage
-                .from('AssetTracker')
-                .upload(uniqueName, fileBuffer, {
-                    contentType: fileType,
-                });
-
-            if (error) {
-                console.error("Supabase Upload Error:", error);
-                throw new Error("Failed to upload asset receipt/image");
-            }
-
-            const { data: publicUrlData } = supabase.storage
-                .from('AssetTracker')
-                .getPublicUrl(uniqueName);
-
-            fileUrl = publicUrlData.publicUrl;
+            fileUrl = await this.uploadAssetFile(fileBuffer, fileName, fileType);
         }
 
         // Determine initial status based on assignment
@@ -571,9 +575,9 @@ export class AssetsService {
         return updatedAsset;
     }
 
-    async updateAsset(id: string, data: any, actorId?: string) {
+    async updateAsset(id: string, data: any, actorId?: string, fileBuffer?: Buffer, fileName?: string, fileType?: string) {
         const targetAsset = await this.db.query.assets.findFirst({ where: eq(assets.id, id) });
-        const updateData = {
+        const updateData: any = {
             name: data.name,
             category: data.category,
             purchasePrice: data.purchasePrice?.toString(),
@@ -586,6 +590,11 @@ export class AssetsService {
             description: data.description,
             status: data.status,
         };
+
+        if (fileBuffer && fileName) {
+            updateData.fileUrl = await this.uploadAssetFile(fileBuffer, fileName, fileType);
+        }
+
         const [updatedAsset] = await this.db.update(assets)
             .set(updateData)
             .where(eq(assets.id, id))
@@ -726,6 +735,7 @@ export class AssetsService {
             condition: asset.condition,
             purchaseDate: asset.purchaseDate,
             custodianName,
+            fileUrl: asset.fileUrl,
         };
     }
 
