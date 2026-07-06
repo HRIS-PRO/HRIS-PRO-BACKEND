@@ -224,6 +224,17 @@ export const assetLocations = pgTable("ASSET_LOCATION", {
     updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
 });
 
+// Singleton row (id = 'singleton') holding org-wide Asset Tracker settings
+export const orgSettings = pgTable("ORG_SETTINGS", {
+    id: text("id").primaryKey().default("singleton"),
+    orgName: text("orgName").notNull().default("AssetTrackPro Enterprise"),
+    contactEmail: text("contactEmail").notNull().default("admin@assettrack.pro"),
+    theme: text("theme").notNull().default("default"),
+    updatedById: uuid("updatedById").references(() => users.id),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
+});
+
 export const assetReports = pgTable("ASSET_REPORT", {
     id: uuid("id").primaryKey().defaultRandom(),
     assetId: text("assetId").notNull().references(() => assets.id),

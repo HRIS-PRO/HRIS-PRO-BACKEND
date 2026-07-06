@@ -15,6 +15,7 @@ import employeesRoutes from './modules/employees/employees.routes';
 import { assetsRoutes } from './modules/assets/assets.routes';
 import assetCategoriesRoutes from './modules/asset-categories/asset-categories.routes';
 import { assetLocationsRoutes } from './modules/asset-locations/asset-locations.routes';
+import { orgSettingsRoutes } from './modules/org-settings/org-settings.routes';
 import usersRoutes from './modules/users/users.routes';
 import reportsRoutes from './modules/reports/reports.routes';
 import { equipmentRequestsRoutes } from './modules/equipment-requests/equipment-requests.routes';
@@ -118,6 +119,7 @@ const buildApp = async (): Promise<FastifyInstance> => {
     await app.register(assetsRoutes, { prefix: '/assets' });
     await app.register(assetCategoriesRoutes, { prefix: '/asset-categories' });
     await app.register(assetLocationsRoutes, { prefix: '/asset-locations' });
+    await app.register(orgSettingsRoutes, { prefix: '/org-settings' });
     await app.register(usersRoutes, { prefix: '/users' });
     await app.register(reportsRoutes, { prefix: '/reports' });
     await app.register(equipmentRequestsRoutes, { prefix: '/equipment-requests' });
