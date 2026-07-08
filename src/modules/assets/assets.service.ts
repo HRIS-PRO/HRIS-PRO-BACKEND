@@ -1,4 +1,4 @@
-import { eq, inArray } from 'drizzle-orm';
+import { eq, inArray, and, or, isNull } from 'drizzle-orm';
 import { assets, users, assetActivities, assetLocations, departments, employees, assetLifecycleLogs } from '../../db/schema';
 import { AssetLocationsService } from '../asset-locations/asset-locations.service';
 import { supabase } from '../../utils/supabase';
@@ -179,6 +179,13 @@ export class AssetsService {
         return newAsset;
     }
 
+    // Blank means the field carries no real data yet (unset, empty or a placeholder default)
+    private isBlankField(v: any): boolean {
+        if (v === null || v === undefined) return true;
+        const s = `${v}`.trim();
+        return s === '' || s === 'N/A' || s === '0';
+    }
+
     async bulkCreateAssets(assetsData: any[]) {
         const results = [];
         let offset = 0;
@@ -187,6 +194,57 @@ export class AssetsService {
                 const status = data.assignedTo && data.assignedTo.trim() !== '' ? 'PENDING' : 'IDLE';
                 const cleanAssignedTo = data.assignedTo?.trim() || null;
                 const cleanSerialNumber = data.serialNumber?.trim() || null;
+                const cleanName = data.name?.trim() || null;
+
+                // Upsert: match an existing asset by serial number first, then by
+                // exact name among assets that have no serial yet
+                let existing = null;
+                if (cleanSerialNumber) {
+                    [existing] = await this.db.select().from(assets)
+                        .where(eq(assets.serialNumber, cleanSerialNumber)).limit(1);
+                }
+                if (!existing && cleanName) {
+                    [existing] = await this.db.select().from(assets)
+                        .where(and(
+                            eq(assets.name, cleanName),
+                            or(isNull(assets.serialNumber), eq(assets.serialNumber, ''))
+                        )).limit(1);
+                }
+
+                if (existing) {
+                    // Only fill blanks — never overwrite live data with spreadsheet values
+                    const updates: any = {};
+                    if (this.isBlankField(existing.serialNumber) && cleanSerialNumber) updates.serialNumber = cleanSerialNumber;
+                    if (this.isBlankField(existing.purchasePrice) && data.purchasePrice) updates.purchasePrice = data.purchasePrice.toString();
+                    if (this.isBlankField(existing.condition) && data.condition) updates.condition = data.condition;
+                    if (this.isBlankField(existing.location) && data.location) updates.location = data.location;
+                    if (this.isBlankField(existing.department) && data.department) updates.department = data.department;
+                    if (this.isBlankField(existing.manager) && data.manager) updates.manager = data.manager;
+                    if (this.isBlankField(existing.description) && data.description) updates.description = data.description;
+
+                    if (Object.keys(updates).length > 0) {
+                        const [updated] = await this.db.update(assets)
+                            .set(updates)
+                            .where(eq(assets.id, existing.id))
+                            .returning();
+
+                        await this.db.insert(assetActivities).values({
+                            type: 'system',
+                            title: 'Asset Enriched (Batch)',
+                            desc: `${updated.name} was updated via bulk import (${Object.keys(updates).join(', ')}).`,
+                            icon: 'sync',
+                            color: 'indigo',
+                            roles: ['SUPER_ADMIN', 'ADMIN_USER', 'AUDITOR'],
+                            assetId: updated.id
+                        });
+
+                        results.push(updated);
+                    } else {
+                        results.push(existing);
+                    }
+                    continue;
+                }
+
                 // Generate a unique internal ID for each imported row
                 const assetId = `AST-B-${Math.floor(Math.random() * 16777215).toString(16).toUpperCase()}`;
                 // Allocate the next sequential display number for this batch row
