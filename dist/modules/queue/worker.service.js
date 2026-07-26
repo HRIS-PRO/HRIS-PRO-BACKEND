@@ -26,19 +26,20 @@ const processCampaignMessage = async (job) => {
         // Log success
         await db_1.db.insert(schema_1.campaignAnalytics).values({
             campaignId: data.campaignId,
-            contactId: data.contactId,
+            contactId: data.contactId || null,
             eventType: 'SENT',
+            metadata: data.contactId ? undefined : { manualPhone: data.contactPhone },
             occurredAt: new Date()
         });
     }
     catch (error) {
-        console.error(`[Worker] Failed to process job ${job.id} for contact ${data.contactId}:`, error);
+        console.error(`[Worker] Failed to process job ${job.id} for contact ${data.contactId || data.contactPhone}:`, error);
         // Log failure
         await db_1.db.insert(schema_1.campaignAnalytics).values({
             campaignId: data.campaignId,
-            contactId: data.contactId,
+            contactId: data.contactId || null,
             eventType: 'FAILED',
-            metadata: { error: error.message },
+            metadata: { error: error.message, ...(data.contactId ? {} : { manualPhone: data.contactPhone }) },
             occurredAt: new Date()
         });
         // Re-throw so BullMQ knows it failed and applies retry strategy

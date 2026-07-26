@@ -76,6 +76,22 @@ class AssetsController {
             return reply.status(500).send({ message: error.message || 'Failed to fetch lifecycle logs' });
         }
     }
+    async addManualLog(request, reply) {
+        try {
+            const { id } = request.params;
+            const note = request.body?.note?.trim();
+            if (!note) {
+                return reply.status(400).send({ message: 'Note text is required' });
+            }
+            const actorId = request.user?.id;
+            const logs = await this.assetsService.addManualLog(id, actorId, note);
+            return reply.status(201).send(logs);
+        }
+        catch (error) {
+            request.log.error(error);
+            return reply.status(500).send({ message: error.message || 'Failed to add log entry' });
+        }
+    }
     async acceptAsset(request, reply) {
         try {
             const { id } = request.params;
@@ -184,8 +200,37 @@ class AssetsController {
     async updateAsset(request, reply) {
         try {
             const { id } = request.params;
-            const data = request.body;
-            const updatedAsset = await this.assetsService.updateAsset(id, data);
+            let data = {};
+            let fileBuffer;
+            let fileName;
+            let fileType;
+            if (request.isMultipart()) {
+                for await (const part of request.parts()) {
+                    if (part.type === 'file') {
+                        fileBuffer = await part.toBuffer();
+                        fileName = part.filename;
+                        fileType = part.mimetype;
+                    }
+                    else {
+                        try {
+                            if (part.fieldname === 'data') {
+                                data = JSON.parse(part.value);
+                            }
+                            else {
+                                data[part.fieldname] = part.value;
+                            }
+                        }
+                        catch (e) {
+                            data[part.fieldname] = part.value;
+                        }
+                    }
+                }
+            }
+            else {
+                data = request.body;
+            }
+            const actorId = request.user?.id;
+            const updatedAsset = await this.assetsService.updateAsset(id, data, actorId, fileBuffer, fileName, fileType);
             return reply.send(updatedAsset);
         }
         catch (error) {

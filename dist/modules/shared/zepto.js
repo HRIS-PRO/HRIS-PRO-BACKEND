@@ -76,7 +76,7 @@ async function sendEmail(to, subject, htmlContent, preheader = '', fromName, fro
             throw new Error(`Failed to send email: ${response.statusText}`);
         }
         const data = await response.json();
-        console.log('Email sent successfully:', data);
+        // console.log('Email sent successfully:', data);
     }
     catch (error) {
         console.error('Email sending failed:', error);

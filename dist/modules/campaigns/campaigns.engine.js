@@ -11,6 +11,29 @@ class CampaignsEngine {
         this.dbClient = dbClient;
     }
     async processScheduledCampaigns() {
+        // 1. Handle time-scheduled campaigns whose scheduledAt has passed
+        const scheduledCampaigns = await this.dbClient.query.campaigns.findMany({
+            where: (0, drizzle_orm_1.eq)(schema_1.campaigns.status, 'SCHEDULED')
+        });
+        for (const campaign of scheduledCampaigns) {
+            try {
+                if (campaign.scheduledAt && new Date(campaign.scheduledAt) <= new Date()) {
+                    console.log(`[Scheduler] Campaign ${campaign.id} schedule is due. Executing...`);
+                    // Transition to APPROVED so executeCampaign can pick it up
+                    await this.dbClient.update(schema_1.campaigns)
+                        .set({ status: 'APPROVED', updatedAt: new Date() })
+                        .where((0, drizzle_orm_1.eq)(schema_1.campaigns.id, campaign.id));
+                    // If it's a one-off scheduled campaign (not recurring), execute immediately
+                    if (!campaign.cycleConfig && !campaign.anniversaryConfig) {
+                        await this.executeCampaign(campaign.id);
+                    }
+                }
+            }
+            catch (error) {
+                console.error(`[Scheduler] Failed to process scheduled campaign ${campaign.id}:`, error);
+            }
+        }
+        // 2. Handle recurring campaigns (cycle + anniversary) — these sit in APPROVED status
         const activeCampaigns = await this.dbClient.query.campaigns.findMany({
             where: (0, drizzle_orm_1.eq)(schema_1.campaigns.status, 'APPROVED')
         });
@@ -24,7 +47,7 @@ class CampaignsEngine {
                 }
             }
             catch (error) {
-                console.error(`Failed to process scheduled campaign ${campaign.id}:`, error);
+                console.error(`[Scheduler] Failed to process recurring campaign ${campaign.id}:`, error);
             }
         }
     }
@@ -146,18 +169,37 @@ class CampaignsEngine {
             .set({ status: 'SENDING', updatedAt: new Date() })
             .where((0, drizzle_orm_1.eq)(schema_1.campaigns.id, campaignId));
         try {
-            const contacts = targetCustomerIds && targetCustomerIds.length > 0
-                ? await this.dbClient.query.bulkCustomers.findMany({
+            const content = campaign.content;
+            const manualRecipients = content?.manualRecipients || [];
+            // Resolve group-based contacts (only if campaign has group recipients)
+            let contacts = [];
+            if (targetCustomerIds && targetCustomerIds.length > 0) {
+                contacts = await this.dbClient.query.bulkCustomers.findMany({
                     where: (0, drizzle_orm_1.inArray)(schema_1.bulkCustomers.id, targetCustomerIds)
-                })
-                : await this.resolveCampaignContacts(campaign);
-            if (contacts.length === 0) {
+                });
+            }
+            else if (manualRecipients.length === 0) {
+                // Only resolve groups if no manual recipients
+                contacts = await this.resolveCampaignContacts(campaign);
+            }
+            // Build synthetic contact objects for manual phone numbers
+            const manualContacts = manualRecipients.map((phone, idx) => ({
+                id: `manual_${campaignId}_${idx}`,
+                firstName: '',
+                surname: '',
+                fullName: '',
+                email: '',
+                mobilePhone: phone,
+                customFields: {},
+            }));
+            const allContacts = [...contacts, ...manualContacts];
+            if (allContacts.length === 0) {
                 await this.dbClient.update(schema_1.campaigns)
                     .set({ status: 'COMPLETED', updatedAt: new Date() })
                     .where((0, drizzle_orm_1.eq)(schema_1.campaigns.id, campaignId));
                 return { sent: 0, message: "No recipients found" };
             }
-            const result = await this.dispatchToContacts(campaign, contacts);
+            const result = await this.dispatchToContacts(campaign, allContacts);
             await this.dbClient.update(schema_1.campaigns)
                 .set({ status: 'COMPLETED', updatedAt: new Date() })
                 .where((0, drizzle_orm_1.eq)(schema_1.campaigns.id, campaignId));
@@ -306,6 +348,7 @@ class CampaignsEngine {
             : 0;
         let currentDelay = 0;
         for (const contact of contacts) {
+            const isManualContact = contact.id.startsWith('manual_');
             try {
                 // Merge external data if exists
                 const contactKeyPhone = (0, phone_utils_1.normalizeIdentifier)(contact.mobilePhone);
@@ -332,7 +375,7 @@ class CampaignsEngine {
                 const jobId = `camp_${campaign.id}_${contact.id}_${Date.now()}`;
                 await (0, queue_service_1.addCampaignJob)(jobId, {
                     campaignId: campaign.id,
-                    contactId: contact.id,
+                    contactId: isManualContact ? null : contact.id,
                     contactEmail: contact.email || undefined,
                     contactPhone: contact.mobilePhone || undefined,
                     channel: campaign.channel,
@@ -353,9 +396,9 @@ class CampaignsEngine {
                 console.error(`Failed to dispatch job to queue for contact ${contact.id}:`, err);
                 await this.dbClient.insert(schema_1.campaignAnalytics).values({
                     campaignId: campaign.id,
-                    contactId: contact.id,
+                    contactId: isManualContact ? null : contact.id,
                     eventType: 'FAILED',
-                    metadata: { error: "Failed to queue job: " + err.message },
+                    metadata: { error: "Failed to queue job: " + err.message, ...(isManualContact ? { manualPhone: contact.mobilePhone } : {}) },
                     occurredAt: new Date()
                 });
             }

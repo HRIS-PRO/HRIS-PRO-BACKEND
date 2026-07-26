@@ -6,11 +6,11 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.StorageService = void 0;
 const sharp_1 = __importDefault(require("sharp"));
 const env_1 = require("../../config/env");
-const BUCKET = 'MsgScaleBulk';
+const DEFAULT_BUCKET = 'MsgScaleBulk';
 const STORAGE_URL = `${env_1.env.SUPABASE_URL}/storage/v1`;
 const AUTH_HEADER = `Bearer ${env_1.env.SUPABASE_KEY}`;
 class StorageService {
-    static async uploadFile(file, path) {
+    static async uploadFile(file, path, bucket = DEFAULT_BUCKET) {
         let buffer = file.buffer;
         let contentType = file.mimetype;
         let finalPath = path;
@@ -29,7 +29,7 @@ class StorageService {
             }
         }
         // Upload via direct HTTP POST to Supabase Storage REST API
-        const uploadUrl = `${STORAGE_URL}/object/${BUCKET}/${finalPath}`;
+        const uploadUrl = `${STORAGE_URL}/object/${bucket}/${finalPath}`;
         const response = await fetch(uploadUrl, {
             method: 'POST',
             headers: {
@@ -43,7 +43,7 @@ class StorageService {
             const text = await response.text();
             throw new Error(`Storage upload failed (${response.status}): ${text}`);
         }
-        const publicUrl = `${STORAGE_URL}/object/public/${BUCKET}/${finalPath}`;
+        const publicUrl = `${STORAGE_URL}/object/public/${bucket}/${finalPath}`;
         return {
             url: publicUrl,
             path: finalPath,
@@ -51,8 +51,8 @@ class StorageService {
             size: buffer.length,
         };
     }
-    static async deleteFile(path) {
-        const deleteUrl = `${STORAGE_URL}/object/${BUCKET}`;
+    static async deleteFile(path, bucket = DEFAULT_BUCKET) {
+        const deleteUrl = `${STORAGE_URL}/object/${bucket}`;
         const response = await fetch(deleteUrl, {
             method: 'DELETE',
             headers: {

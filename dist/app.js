@@ -19,6 +19,7 @@ const employees_routes_1 = __importDefault(require("./modules/employees/employee
 const assets_routes_1 = require("./modules/assets/assets.routes");
 const asset_categories_routes_1 = __importDefault(require("./modules/asset-categories/asset-categories.routes"));
 const asset_locations_routes_1 = require("./modules/asset-locations/asset-locations.routes");
+const org_settings_routes_1 = require("./modules/org-settings/org-settings.routes");
 const users_routes_1 = __importDefault(require("./modules/users/users.routes"));
 const reports_routes_1 = __importDefault(require("./modules/reports/reports.routes"));
 const equipment_requests_routes_1 = require("./modules/equipment-requests/equipment-requests.routes");
@@ -27,6 +28,7 @@ const templates_routes_1 = __importDefault(require("./modules/templates/template
 const campaigns_routes_1 = require("./modules/campaigns/campaigns.routes");
 const audits_routes_1 = __importDefault(require("./modules/audits/audits.routes"));
 const activities_routes_1 = __importDefault(require("./modules/activities/activities.routes"));
+const public_routes_1 = require("./modules/public/public.routes");
 const ws_routes_1 = require("./websocket/ws.routes");
 const drizzle_orm_1 = require("drizzle-orm");
 const schema_1 = require("./db/schema");
@@ -100,6 +102,7 @@ const buildApp = async () => {
     await app.register(assets_routes_1.assetsRoutes, { prefix: '/assets' });
     await app.register(asset_categories_routes_1.default, { prefix: '/asset-categories' });
     await app.register(asset_locations_routes_1.assetLocationsRoutes, { prefix: '/asset-locations' });
+    await app.register(org_settings_routes_1.orgSettingsRoutes, { prefix: '/org-settings' });
     await app.register(users_routes_1.default, { prefix: '/users' });
     await app.register(reports_routes_1.default, { prefix: '/reports' });
     await app.register(equipment_requests_routes_1.equipmentRequestsRoutes, { prefix: '/equipment-requests' });
@@ -108,6 +111,7 @@ const buildApp = async () => {
     await app.register(campaigns_routes_1.campaignsRoutes, { prefix: '/campaigns' });
     await app.register(audits_routes_1.default, { prefix: '/audits' });
     await app.register(activities_routes_1.default, { prefix: '/activities' });
+    await app.register(public_routes_1.publicRoutes, { prefix: '/public' });
     return app;
 };
 exports.default = buildApp;

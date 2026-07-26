@@ -12,6 +12,21 @@ class AssetsService {
     constructor(db) {
         this.db = db;
     }
+    // Generates the next human-facing sequential asset number (AST-NF-00001, AST-NF-00002, ...).
+    // Pass `offset` when allocating several numbers in one batch (e.g. bulk import) so they don't collide.
+    async generateAssetNumber(offset = 0) {
+        const rows = await this.db.select({ n: schema_1.assets.assetNumber }).from(schema_1.assets);
+        let max = 0;
+        for (const r of rows) {
+            const m = /^AST-NF-(\d+)$/.exec(r.n || '');
+            if (m) {
+                const val = parseInt(m[1], 10);
+                if (val > max)
+                    max = val;
+            }
+        }
+        return `AST-NF-${String(max + 1 + offset).padStart(5, '0')}`;
+    }
     async logLifecycle(payload) {
         try {
             let actorId = payload.performedById;
@@ -35,24 +50,27 @@ class AssetsService {
             console.error('Failed to log lifecycle event:', e);
         }
     }
+    // Uploads an asset image/receipt to Supabase storage and returns its public URL.
+    async uploadAssetFile(fileBuffer, fileName, fileType) {
+        const uniqueName = `${Date.now()}-${fileName}`;
+        const { error } = await supabase_1.supabase.storage
+            .from('AssetTracker')
+            .upload(uniqueName, fileBuffer, {
+            contentType: fileType,
+        });
+        if (error) {
+            console.error("Supabase Upload Error:", error);
+            throw new Error(`Failed to upload asset image to storage: ${error.message || 'storage service unreachable'}`);
+        }
+        const { data: publicUrlData } = supabase_1.supabase.storage
+            .from('AssetTracker')
+            .getPublicUrl(uniqueName);
+        return publicUrlData.publicUrl;
+    }
     async createAsset(data, fileBuffer, fileName, fileType, actorId) {
         let fileUrl = null;
-        // Upload to Supabase if a file was provided
         if (fileBuffer && fileName) {
-            const uniqueName = `${Date.now()}-${fileName}`;
-            const { data: uploadData, error } = await supabase_1.supabase.storage
-                .from('AssetTracker')
-                .upload(uniqueName, fileBuffer, {
-                contentType: fileType,
-            });
-            if (error) {
-                console.error("Supabase Upload Error:", error);
-                throw new Error("Failed to upload asset receipt/image");
-            }
-            const { data: publicUrlData } = supabase_1.supabase.storage
-                .from('AssetTracker')
-                .getPublicUrl(uniqueName);
-            fileUrl = publicUrlData.publicUrl;
+            fileUrl = await this.uploadAssetFile(fileBuffer, fileName, fileType);
         }
         // Determine initial status based on assignment
         const status = data.assignedTo && data.assignedTo.trim() !== '' ? 'PENDING' : 'IDLE';
@@ -62,9 +80,12 @@ class AssetsService {
         const cleanSerialNumber = data.serialNumber?.trim() || null;
         // Generate ID - Always use a unique internal ID
         const assetId = `AST-${Math.floor(100000 + Math.random() * 900000)}`;
+        // Generate the human-facing sequential display number
+        const assetNumber = await this.generateAssetNumber();
         // Save to Database
         const [newAsset] = await this.db.insert(schema_1.assets).values({
             id: assetId,
+            assetNumber,
             name: data.name,
             category: data.category,
             purchasePrice: data.purchasePrice?.toString() || "0",
@@ -131,17 +152,79 @@ class AssetsService {
         }
         return newAsset;
     }
+    // Blank means the field carries no real data yet (unset, empty or a placeholder default)
+    isBlankField(v) {
+        if (v === null || v === undefined)
+            return true;
+        const s = `${v}`.trim();
+        return s === '' || s === 'N/A' || s === '0';
+    }
     async bulkCreateAssets(assetsData) {
         const results = [];
+        let offset = 0;
         for (const data of assetsData) {
             try {
                 const status = data.assignedTo && data.assignedTo.trim() !== '' ? 'PENDING' : 'IDLE';
                 const cleanAssignedTo = data.assignedTo?.trim() || null;
                 const cleanSerialNumber = data.serialNumber?.trim() || null;
+                const cleanName = data.name?.trim() || null;
+                // Upsert: match an existing asset by serial number first, then by
+                // exact name among assets that have no serial yet
+                let existing = null;
+                if (cleanSerialNumber) {
+                    [existing] = await this.db.select().from(schema_1.assets)
+                        .where((0, drizzle_orm_1.eq)(schema_1.assets.serialNumber, cleanSerialNumber)).limit(1);
+                }
+                if (!existing && cleanName) {
+                    [existing] = await this.db.select().from(schema_1.assets)
+                        .where((0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(schema_1.assets.name, cleanName), (0, drizzle_orm_1.or)((0, drizzle_orm_1.isNull)(schema_1.assets.serialNumber), (0, drizzle_orm_1.eq)(schema_1.assets.serialNumber, '')))).limit(1);
+                }
+                if (existing) {
+                    // Only fill blanks — never overwrite live data with spreadsheet values
+                    const updates = {};
+                    if (this.isBlankField(existing.serialNumber) && cleanSerialNumber)
+                        updates.serialNumber = cleanSerialNumber;
+                    if (this.isBlankField(existing.purchasePrice) && data.purchasePrice)
+                        updates.purchasePrice = data.purchasePrice.toString();
+                    if (this.isBlankField(existing.condition) && data.condition)
+                        updates.condition = data.condition;
+                    if (this.isBlankField(existing.location) && data.location)
+                        updates.location = data.location;
+                    if (this.isBlankField(existing.department) && data.department)
+                        updates.department = data.department;
+                    if (this.isBlankField(existing.manager) && data.manager)
+                        updates.manager = data.manager;
+                    if (this.isBlankField(existing.description) && data.description)
+                        updates.description = data.description;
+                    if (Object.keys(updates).length > 0) {
+                        const [updated] = await this.db.update(schema_1.assets)
+                            .set(updates)
+                            .where((0, drizzle_orm_1.eq)(schema_1.assets.id, existing.id))
+                            .returning();
+                        await this.db.insert(schema_1.assetActivities).values({
+                            type: 'system',
+                            title: 'Asset Enriched (Batch)',
+                            desc: `${updated.name} was updated via bulk import (${Object.keys(updates).join(', ')}).`,
+                            icon: 'sync',
+                            color: 'indigo',
+                            roles: ['SUPER_ADMIN', 'ADMIN_USER', 'AUDITOR'],
+                            assetId: updated.id
+                        });
+                        results.push(updated);
+                    }
+                    else {
+                        results.push(existing);
+                    }
+                    continue;
+                }
                 // Generate a unique internal ID for each imported row
                 const assetId = `AST-B-${Math.floor(Math.random() * 16777215).toString(16).toUpperCase()}`;
+                // Allocate the next sequential display number for this batch row
+                const assetNumber = await this.generateAssetNumber(offset);
+                offset++;
                 const values = {
                     id: assetId,
+                    assetNumber,
                     name: data.name || 'Unnamed Asset',
                     category: data.category || 'General',
                     purchasePrice: data.purchasePrice?.toString() || "0",
@@ -373,7 +456,7 @@ class AssetsService {
         await this.db.insert(schema_1.assetActivities).values({
             type: 'system',
             title: 'Action Required',
-            desc: `Please accept the reassignment for ${updatedAsset.name}.`,
+            desc: `Please accept the assignment of ${updatedAsset.name}.`,
             icon: 'signature',
             color: 'amber',
             roles: ['USER', 'SUPER_ADMIN'],
@@ -465,7 +548,7 @@ class AssetsService {
         });
         return updatedAsset;
     }
-    async updateAsset(id, data, actorId) {
+    async updateAsset(id, data, actorId, fileBuffer, fileName, fileType) {
         const targetAsset = await this.db.query.assets.findFirst({ where: (0, drizzle_orm_1.eq)(schema_1.assets.id, id) });
         const updateData = {
             name: data.name,
@@ -480,6 +563,9 @@ class AssetsService {
             description: data.description,
             status: data.status,
         };
+        if (fileBuffer && fileName) {
+            updateData.fileUrl = await this.uploadAssetFile(fileBuffer, fileName, fileType);
+        }
         const [updatedAsset] = await this.db.update(schema_1.assets)
             .set(updateData)
             .where((0, drizzle_orm_1.eq)(schema_1.assets.id, id))
@@ -562,6 +648,44 @@ class AssetsService {
     async getAllAssets() {
         return this.db.query.assets.findMany();
     }
+    // Public, read-only snapshot for the QR scan page. No auth required.
+    // Exposes only basic, non-sensitive fields plus the resolved custodian name.
+    async getPublicAssetInfo(id) {
+        const asset = await this.db.query.assets.findFirst({
+            where: (0, drizzle_orm_1.eq)(schema_1.assets.id, id)
+        });
+        if (!asset)
+            return null;
+        let custodianName = null;
+        if (asset.assignedTo) {
+            const employee = await this.db.query.employees.findFirst({
+                where: (0, drizzle_orm_1.eq)(schema_1.employees.userId, asset.assignedTo)
+            });
+            if (employee) {
+                custodianName = `${employee.firstName} ${employee.surname}`.trim();
+            }
+            else {
+                const user = await this.db.query.users.findFirst({
+                    where: (0, drizzle_orm_1.eq)(schema_1.users.id, asset.assignedTo)
+                });
+                custodianName = user?.email || null;
+            }
+        }
+        return {
+            id: asset.id,
+            assetNumber: asset.assetNumber,
+            name: asset.name,
+            category: asset.category,
+            serialNumber: asset.serialNumber,
+            status: asset.status,
+            location: asset.location,
+            department: asset.department,
+            condition: asset.condition,
+            purchaseDate: asset.purchaseDate,
+            custodianName,
+            fileUrl: asset.fileUrl,
+        };
+    }
     async getLifecycleLogs(assetId) {
         return await this.db.query.assetLifecycleLogs.findMany({
             where: (0, drizzle_orm_1.eq)(schema_1.assetLifecycleLogs.assetId, assetId),
@@ -572,6 +696,19 @@ class AssetsService {
             },
             orderBy: (logs, { desc }) => [desc(logs.createdAt)]
         });
+    }
+    // Records a free-text audit-log entry added manually by an admin/auditor.
+    async addManualLog(assetId, actorId, note) {
+        const asset = await this.db.query.assets.findFirst({ where: (0, drizzle_orm_1.eq)(schema_1.assets.id, assetId) });
+        if (!asset)
+            throw new Error('Asset not found');
+        await this.logLifecycle({
+            assetId,
+            performedById: actorId,
+            actionType: 'NOTE',
+            metadata: { note }
+        });
+        return this.getLifecycleLogs(assetId);
     }
 }
 exports.AssetsService = AssetsService;

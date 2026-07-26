@@ -230,6 +230,7 @@ export const orgSettings = pgTable("ORG_SETTINGS", {
     orgName: text("orgName").notNull().default("AssetTrackPro Enterprise"),
     contactEmail: text("contactEmail").notNull().default("admin@assettrack.pro"),
     theme: text("theme").notNull().default("default"),
+    logoUrl: text("logoUrl"),
     updatedById: uuid("updatedById").references(() => users.id),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),

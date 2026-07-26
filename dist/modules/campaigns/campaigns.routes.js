@@ -11,6 +11,8 @@ async function campaignsRoutes(app) {
     app.addHook('onRequest', app.checkAppRole('MSGSCALE_BULK'));
     // List campaigns in a workspace
     app.get('/:workspaceId', (request, reply) => campaignsController.getCampaigns(request, reply));
+    // Workspace analytics (aggregated)
+    app.get('/:workspaceId/analytics', (request, reply) => campaignsController.getAnalytics(request, reply));
     // Get single campaign detail
     app.get('/:workspaceId/:id', (request, reply) => campaignsController.getCampaign(request, reply));
     // Create campaign

@@ -116,19 +116,23 @@ class CampaignsService {
                 }
                 totalReach += count;
             }
+            const content = c.content;
+            if (content?.manualRecipients?.length) {
+                totalReach += content.manualRecipients.length;
+            }
             // Fetch Analytics Stats - Unique counts only (if sent, they aren't 'failed' anymore)
-            const sentRes = await this.db.select({ count: (0, drizzle_orm_1.sql) `count(DISTINCT ${schema_1.campaignAnalytics.contactId})` })
+            const sentRes = await this.db.select({ count: (0, drizzle_orm_1.sql) `count(DISTINCT COALESCE(${schema_1.campaignAnalytics.contactId}::text, ${schema_1.campaignAnalytics.metadata}->>'manualPhone'))` })
                 .from(schema_1.campaignAnalytics)
                 .where((0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(schema_1.campaignAnalytics.campaignId, c.id), (0, drizzle_orm_1.eq)(schema_1.campaignAnalytics.eventType, 'SENT')));
             const sentCountValue = Number(sentRes[0]?.count || 0);
-            const failedRes = await this.db.select({ count: (0, drizzle_orm_1.sql) `count(DISTINCT ${schema_1.campaignAnalytics.contactId})` })
+            const failedRes = await this.db.select({ count: (0, drizzle_orm_1.sql) `count(DISTINCT COALESCE(${schema_1.campaignAnalytics.contactId}::text, ${schema_1.campaignAnalytics.metadata}->>'manualPhone'))` })
                 .from(schema_1.campaignAnalytics)
                 .where((0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(schema_1.campaignAnalytics.campaignId, c.id), (0, drizzle_orm_1.sql) `${schema_1.campaignAnalytics.eventType} IN ('FAILED', 'BOUNCED')`, 
             // Only count as failed if there is NO successful 'SENT' event for this contact in this campaign
             (0, drizzle_orm_1.sql) `NOT EXISTS (
                         SELECT 1 FROM "CAMPAIGN_ANALYTICS" sub 
                         WHERE sub."campaignId" = ${c.id} 
-                        AND sub."contactId" = ${schema_1.campaignAnalytics.contactId} 
+                        AND COALESCE(sub."contactId"::text, sub.metadata->>'manualPhone') = COALESCE(${schema_1.campaignAnalytics.contactId}::text, ${schema_1.campaignAnalytics.metadata}->>'manualPhone')
                         AND sub."eventType" = 'SENT'
                     )`));
             return {
@@ -219,14 +223,20 @@ class CampaignsService {
     }
     async submitCampaign(id, workspaceId, actorId, actorRole) {
         const existing = await this.db.query.campaigns.findFirst({
-            where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(schema_1.campaigns.id, id), (0, drizzle_orm_1.eq)(schema_1.campaigns.workspaceId, workspaceId), (0, drizzle_orm_1.eq)(schema_1.campaigns.status, 'DRAFT'))
+            where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(schema_1.campaigns.id, id), (0, drizzle_orm_1.eq)(schema_1.campaigns.workspaceId, workspaceId))
         });
         if (!existing)
+            return null;
+        if (existing.status !== 'DRAFT' && existing.status !== 'REJECTED')
             return null;
         // Skip flow for Admin or Manager
         if (actorRole === 'Admin' || actorRole === 'Manager') {
             const isRecurring = existing.cycleConfig || existing.anniversaryConfig;
-            const status = existing.scheduledAt && new Date(existing.scheduledAt) > new Date() ? 'SCHEDULED' : 'APPROVED';
+            // Recurring campaigns (cycle/anniversary) must be APPROVED so the scheduler can find them.
+            // Only one-off campaigns with a future scheduledAt get SCHEDULED status.
+            const status = isRecurring
+                ? 'APPROVED'
+                : (existing.scheduledAt && new Date(existing.scheduledAt) > new Date() ? 'SCHEDULED' : 'APPROVED');
             const [updated] = await this.db.update(schema_1.campaigns)
                 .set({ status })
                 .where((0, drizzle_orm_1.eq)(schema_1.campaigns.id, id))
@@ -346,8 +356,9 @@ class CampaignsService {
             }
             // Final Approval or Reject
             const isRecurring = existing.cycleConfig || existing.anniversaryConfig;
+            // Recurring campaigns must be APPROVED so the scheduler can find them.
             const status = action === 'APPROVE'
-                ? (existing.scheduledAt && new Date(existing.scheduledAt) > new Date() ? 'SCHEDULED' : 'APPROVED')
+                ? (isRecurring ? 'APPROVED' : (existing.scheduledAt && new Date(existing.scheduledAt) > new Date() ? 'SCHEDULED' : 'APPROVED'))
                 : 'REJECTED';
             const [updated] = await tx.update(schema_1.campaigns)
                 .set({
@@ -415,6 +426,119 @@ class CampaignsService {
         if (records.length > 0) {
             await this.db.insert(schema_1.campaignExternalData).values(records);
         }
+    }
+    async getAnalytics(workspaceId) {
+        // 1. All campaigns for this workspace (non-draft)
+        const allCampaigns = await this.db.query.campaigns.findMany({
+            where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(schema_1.campaigns.workspaceId, workspaceId), (0, drizzle_orm_1.sql) `${schema_1.campaigns.status} NOT IN ('DRAFT')`),
+            orderBy: (campaigns, { desc }) => [desc(campaigns.createdAt)],
+        });
+        // 2. Aggregate analytics across all campaigns in this workspace
+        const campaignIds = allCampaigns.map(c => c.id);
+        if (campaignIds.length === 0) {
+            return {
+                overview: { totalSent: 0, totalDelivered: 0, totalFailed: 0, totalBounced: 0, totalCampaigns: 0 },
+                topCampaigns: [],
+                dailyVolume: [],
+                channelBreakdown: [],
+            };
+        }
+        // Get event counts by type across all workspace campaigns
+        const eventCounts = await this.db
+            .select({
+            eventType: schema_1.campaignAnalytics.eventType,
+            count: (0, drizzle_orm_1.sql) `count(*)`,
+        })
+            .from(schema_1.campaignAnalytics)
+            .where((0, drizzle_orm_1.sql) `${schema_1.campaignAnalytics.campaignId} IN (${drizzle_orm_1.sql.join(campaignIds.map(id => (0, drizzle_orm_1.sql) `${id}`), (0, drizzle_orm_1.sql) `, `)})`)
+            .groupBy(schema_1.campaignAnalytics.eventType);
+        const countMap = {};
+        eventCounts.forEach(e => { countMap[e.eventType] = Number(e.count); });
+        // 3. Per-campaign performance (top N by sent count)
+        const perCampaign = await Promise.all(allCampaigns.slice(0, 20).map(async (c) => {
+            const stats = await this.db
+                .select({
+                eventType: schema_1.campaignAnalytics.eventType,
+                count: (0, drizzle_orm_1.sql) `count(*)`,
+            })
+                .from(schema_1.campaignAnalytics)
+                .where((0, drizzle_orm_1.eq)(schema_1.campaignAnalytics.campaignId, c.id))
+                .groupBy(schema_1.campaignAnalytics.eventType);
+            const m = {};
+            stats.forEach(s => { m[s.eventType] = Number(s.count); });
+            return {
+                id: c.id,
+                name: c.name,
+                channel: c.channel,
+                status: c.status,
+                category: c.category,
+                createdAt: c.createdAt,
+                sent: m['SENT'] || 0,
+                delivered: m['DELIVERED'] || 0,
+                failed: m['FAILED'] || 0,
+                bounced: m['BOUNCED'] || 0,
+                opened: m['OPENED'] || 0,
+                clicked: m['CLICKED'] || 0,
+            };
+        }));
+        // Sort by sent desc for "top performing"
+        perCampaign.sort((a, b) => b.sent - a.sent);
+        // 4. Daily volume (last 30 days)
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+        const dailyVolume = await this.db
+            .select({
+            day: (0, drizzle_orm_1.sql) `TO_CHAR(${schema_1.campaignAnalytics.occurredAt}, 'YYYY-MM-DD')`,
+            eventType: schema_1.campaignAnalytics.eventType,
+            count: (0, drizzle_orm_1.sql) `count(*)`,
+        })
+            .from(schema_1.campaignAnalytics)
+            .where((0, drizzle_orm_1.and)((0, drizzle_orm_1.sql) `${schema_1.campaignAnalytics.campaignId} IN (${drizzle_orm_1.sql.join(campaignIds.map(id => (0, drizzle_orm_1.sql) `${id}`), (0, drizzle_orm_1.sql) `, `)})`, (0, drizzle_orm_1.sql) `${schema_1.campaignAnalytics.occurredAt} >= ${thirtyDaysAgo.toISOString()}`))
+            .groupBy((0, drizzle_orm_1.sql) `TO_CHAR(${schema_1.campaignAnalytics.occurredAt}, 'YYYY-MM-DD')`, schema_1.campaignAnalytics.eventType)
+            .orderBy((0, drizzle_orm_1.sql) `TO_CHAR(${schema_1.campaignAnalytics.occurredAt}, 'YYYY-MM-DD')`);
+        // Reshape daily data into { day, sent, delivered, failed, bounced }
+        const dayMap = new Map();
+        dailyVolume.forEach(row => {
+            if (!dayMap.has(row.day))
+                dayMap.set(row.day, {});
+            const entry = dayMap.get(row.day);
+            entry[row.eventType.toLowerCase()] = Number(row.count);
+        });
+        const dailyData = Array.from(dayMap.entries()).map(([day, counts]) => ({
+            day,
+            sent: counts.sent || 0,
+            delivered: counts.delivered || 0,
+            failed: counts.failed || 0,
+            bounced: counts.bounced || 0,
+            opened: counts.opened || 0,
+            clicked: counts.clicked || 0,
+        }));
+        // 5. Channel breakdown
+        const channelStats = allCampaigns.reduce((acc, c) => {
+            if (!acc[c.channel])
+                acc[c.channel] = { count: 0 };
+            acc[c.channel].count++;
+            return acc;
+        }, {});
+        const channelBreakdown = Object.entries(channelStats).map(([channel, data]) => ({
+            channel,
+            campaigns: data.count,
+        }));
+        return {
+            overview: {
+                totalSent: countMap['SENT'] || 0,
+                totalDelivered: countMap['DELIVERED'] || 0,
+                totalFailed: countMap['FAILED'] || 0,
+                totalBounced: countMap['BOUNCED'] || 0,
+                totalOpened: countMap['OPENED'] || 0,
+                totalClicked: countMap['CLICKED'] || 0,
+                totalCampaigns: allCampaigns.length,
+                completedCampaigns: allCampaigns.filter(c => c.status === 'COMPLETED').length,
+            },
+            topCampaigns: perCampaign.slice(0, 10),
+            dailyVolume: dailyData,
+            channelBreakdown,
+        };
     }
     async previewContextMatch(workspaceId, groupIds, externalData) {
         if (!groupIds.length) {

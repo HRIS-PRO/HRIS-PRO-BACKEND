@@ -44,7 +44,7 @@ async function sendBulkEmail(to, subject, htmlContent, preheader = '', fromName,
             body: JSON.stringify({
                 from: {
                     address: fromEmail || env_1.env.ZEPTO_FROM_EMAIL,
-                    name: fromName || "NOLT Finance"
+                    name: fromName || (fromEmail?.includes('noltinvestments') ? 'NOLT Investments' : 'NOLT Finance')
                 },
                 ...payload,
             }),
@@ -55,7 +55,7 @@ async function sendBulkEmail(to, subject, htmlContent, preheader = '', fromName,
             throw new Error(`Failed to send bulk email: ${response.statusText}`);
         }
         const data = await response.json();
-        console.log('Bulk email sent successfully:', data);
+        // console.log('Bulk email sent successfully:', data);
     }
     catch (error) {
         console.error('Bulk email sending failed:', error);

@@ -20,4 +20,5 @@ async function assetsRoutes(app) {
     app.put('/:id/unassign', assetsController.unassignAsset.bind(assetsController));
     app.put('/:id', assetsController.updateAsset.bind(assetsController));
     app.get('/:id/lifecycle', assetsController.getLifecycleLogs.bind(assetsController));
+    app.post('/:id/lifecycle', assetsController.addManualLog.bind(assetsController));
 }

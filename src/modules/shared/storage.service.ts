@@ -1,13 +1,13 @@
 import sharp from 'sharp';
 import { env } from '../../config/env';
 
-const BUCKET = 'MsgScaleBulk';
+const DEFAULT_BUCKET = 'MsgScaleBulk';
 const STORAGE_URL = `${env.SUPABASE_URL}/storage/v1`;
 const AUTH_HEADER = `Bearer ${env.SUPABASE_KEY}`;
 
 export class StorageService {
 
-    static async uploadFile(file: { buffer: Buffer; mimetype: string }, path: string): Promise<{ url: string; path: string; mimeType: string; size: number }> {
+    static async uploadFile(file: { buffer: Buffer; mimetype: string }, path: string, bucket: string = DEFAULT_BUCKET): Promise<{ url: string; path: string; mimeType: string; size: number }> {
         let buffer = file.buffer;
         let contentType = file.mimetype;
         let finalPath = path;
@@ -27,7 +27,7 @@ export class StorageService {
         }
 
         // Upload via direct HTTP POST to Supabase Storage REST API
-        const uploadUrl = `${STORAGE_URL}/object/${BUCKET}/${finalPath}`;
+        const uploadUrl = `${STORAGE_URL}/object/${bucket}/${finalPath}`;
         const response = await fetch(uploadUrl, {
             method: 'POST',
             headers: {
@@ -43,7 +43,7 @@ export class StorageService {
             throw new Error(`Storage upload failed (${response.status}): ${text}`);
         }
 
-        const publicUrl = `${STORAGE_URL}/object/public/${BUCKET}/${finalPath}`;
+        const publicUrl = `${STORAGE_URL}/object/public/${bucket}/${finalPath}`;
 
         return {
             url: publicUrl,
@@ -53,8 +53,8 @@ export class StorageService {
         };
     }
 
-    static async deleteFile(path: string): Promise<void> {
-        const deleteUrl = `${STORAGE_URL}/object/${BUCKET}`;
+    static async deleteFile(path: string, bucket: string = DEFAULT_BUCKET): Promise<void> {
+        const deleteUrl = `${STORAGE_URL}/object/${bucket}`;
         const response = await fetch(deleteUrl, {
             method: 'DELETE',
             headers: {

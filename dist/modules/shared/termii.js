@@ -51,6 +51,7 @@ async function sendSms(to, message, channel = 'generic', senderId = 'NOLTFINANCE
             throw new Error(`Termii API returned a failure message: ${data.message}`);
         }
         console.log(`SMS sent successfully to ${to}. Message ID: ${data.message_id || 'N/A'}`);
+        console.log('Termii SMS API Full Response:', data);
         return data;
     }
     catch (error) {

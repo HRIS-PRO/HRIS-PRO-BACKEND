@@ -14,4 +14,8 @@ export const orgSettingsRoutes = async (app: FastifyInstance) => {
         },
         preHandler: [app.authenticate]
     }, controller.update);
+
+    app.post('/logo', {
+        preHandler: [app.authenticate]
+    }, controller.uploadLogo);
 };

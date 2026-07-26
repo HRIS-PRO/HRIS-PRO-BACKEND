@@ -1,7 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.groupRulesRelations = exports.groupMembersRelations = exports.groupsRelations = exports.groupRules = exports.groupMembers = exports.groups = exports.ruleOperatorEnum = exports.groupTypeEnum = exports.bulkCustomersRelations = exports.bulkCustomers = exports.workspaceMembersRelations = exports.workspacesRelations = exports.workspaceMembers = exports.workspaces = exports.equipmentRequestsRelations = exports.equipmentRequests = exports.assetReportsRelations = exports.assetReports = exports.assetLocations = exports.assetCategories = exports.assetLifecycleLogsRelations = exports.assetLifecycleLogs = exports.assetsRelations = exports.assets = exports.employeesRelations = exports.employees = exports.locations = exports.departmentsRelations = exports.departments = exports.userRolesRelations = exports.usersRelations = exports.userRoles = exports.users = exports.auditResultEnum = exports.auditCycleStatusEnum = exports.analyticsEventTypeEnum = exports.campaignCategoryEnum = exports.campaignStatusEnum = exports.campaignChannelEnum = exports.templateStatusEnum = exports.templateTypeEnum = exports.workspaceStatusEnum = exports.requestStatusEnum = exports.requestPriorityEnum = exports.reportStatusEnum = exports.assetStatusEnum = exports.locationStatusEnum = exports.departmentStatusEnum = exports.employeeStatusEnum = exports.appTypeEnum = void 0;
-exports.groupContextualDataRelations = exports.groupContextualData = exports.campaignExternalDataRelations = exports.campaignExternalData = exports.assetActivities = exports.auditVerificationsRelations = exports.auditCycleAuditorsRelations = exports.auditCyclesRelations = exports.auditVerifications = exports.auditCycleAuditors = exports.auditCycles = exports.campaignAnalyticsRelations = exports.campaignRecipientsRelations = exports.campaignsRelations = exports.campaignAnalytics = exports.campaignRecipients = exports.campaigns = exports.templatesRelations = exports.templates = void 0;
+exports.groupMembersRelations = exports.groupsRelations = exports.groupRules = exports.groupMembers = exports.groups = exports.ruleOperatorEnum = exports.groupTypeEnum = exports.bulkCustomersRelations = exports.bulkCustomers = exports.workspaceMembersRelations = exports.workspacesRelations = exports.workspaceMembers = exports.workspaces = exports.equipmentRequestsRelations = exports.equipmentRequests = exports.assetReportsRelations = exports.assetReports = exports.orgSettings = exports.assetLocations = exports.assetCategories = exports.assetLifecycleLogsRelations = exports.assetLifecycleLogs = exports.assetsRelations = exports.assets = exports.employeesRelations = exports.employees = exports.locations = exports.departmentsRelations = exports.departments = exports.userRolesRelations = exports.usersRelations = exports.userRoles = exports.users = exports.auditResultEnum = exports.auditCycleStatusEnum = exports.analyticsEventTypeEnum = exports.campaignCategoryEnum = exports.campaignStatusEnum = exports.campaignChannelEnum = exports.templateStatusEnum = exports.templateTypeEnum = exports.workspaceStatusEnum = exports.requestStatusEnum = exports.requestPriorityEnum = exports.reportStatusEnum = exports.assetStatusEnum = exports.locationStatusEnum = exports.departmentStatusEnum = exports.employeeStatusEnum = exports.appTypeEnum = void 0;
+exports.groupContextualDataRelations = exports.groupContextualData = exports.campaignExternalDataRelations = exports.campaignExternalData = exports.assetActivities = exports.auditVerificationsRelations = exports.auditCycleAuditorsRelations = exports.auditCyclesRelations = exports.auditVerifications = exports.auditCycleAuditors = exports.auditCycles = exports.campaignAnalyticsRelations = exports.campaignRecipientsRelations = exports.campaignsRelations = exports.campaignAnalytics = exports.campaignRecipients = exports.campaigns = exports.templatesRelations = exports.templates = exports.groupRulesRelations = void 0;
 const pg_core_1 = require("drizzle-orm/pg-core");
 const drizzle_orm_1 = require("drizzle-orm");
 // Enums
@@ -123,7 +123,8 @@ exports.employeesRelations = (0, drizzle_orm_1.relations)(exports.employees, ({ 
 // Asset Management
 // -----------------------------------------------------------------------------
 exports.assets = (0, pg_core_1.pgTable)("ASSET", {
-    id: (0, pg_core_1.text)("id").primaryKey(), // Using custom ID logic (e.g. AST-XXXX)
+    id: (0, pg_core_1.text)("id").primaryKey(), // Internal immutable ID (e.g. AST-XXXX). Referenced by lifecycle logs/reports/audits.
+    assetNumber: (0, pg_core_1.text)("assetNumber").unique(), // Human-facing display number, sequential (e.g. AST-NF-00001)
     name: (0, pg_core_1.text)("name").notNull(),
     category: (0, pg_core_1.text)("category").notNull(),
     assignedTo: (0, pg_core_1.uuid)("assignedTo").references(() => exports.users.id), // Nullable for unassigned
@@ -192,6 +193,17 @@ exports.assetCategories = (0, pg_core_1.pgTable)("ASSET_CATEGORY", {
 exports.assetLocations = (0, pg_core_1.pgTable)("ASSET_LOCATION", {
     id: (0, pg_core_1.uuid)("id").primaryKey().defaultRandom(),
     name: (0, pg_core_1.text)("name").notNull().unique(),
+    createdAt: (0, pg_core_1.timestamp)("createdAt").defaultNow().notNull(),
+    updatedAt: (0, pg_core_1.timestamp)("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
+});
+// Singleton row (id = 'singleton') holding org-wide Asset Tracker settings
+exports.orgSettings = (0, pg_core_1.pgTable)("ORG_SETTINGS", {
+    id: (0, pg_core_1.text)("id").primaryKey().default("singleton"),
+    orgName: (0, pg_core_1.text)("orgName").notNull().default("AssetTrackPro Enterprise"),
+    contactEmail: (0, pg_core_1.text)("contactEmail").notNull().default("admin@assettrack.pro"),
+    theme: (0, pg_core_1.text)("theme").notNull().default("default"),
+    logoUrl: (0, pg_core_1.text)("logoUrl"),
+    updatedById: (0, pg_core_1.uuid)("updatedById").references(() => exports.users.id),
     createdAt: (0, pg_core_1.timestamp)("createdAt").defaultNow().notNull(),
     updatedAt: (0, pg_core_1.timestamp)("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
 });

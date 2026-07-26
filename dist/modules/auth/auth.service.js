@@ -49,7 +49,7 @@ class AuthService {
         // Generate 6-digit OTP
         const otp = crypto_1.default.randomInt(100000, 999999).toString();
         // Debug: Log OTP to console
-        console.log(`🔑 OTP for ${email}: ${otp}`);
+        // console.log(`🔑 OTP for ${email}: ${otp}`);
         // Hash OTP before storing
         const otpHash = crypto_1.default.createHash('sha256').update(otp).digest('hex');
         const otpExpiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
