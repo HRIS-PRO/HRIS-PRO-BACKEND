@@ -98,10 +98,28 @@ jobs:
             --version-label "${version_label}" \
             --source-bundle S3Bucket="${EB_BUCKET}",S3Key="${s3_key}"
 
+          for attempt in {1..12}; do
+            found="$(aws elasticbeanstalk describe-application-versions \
+              --application-name "${EB_APPLICATION_NAME}" \
+              --version-labels "${version_label}" \
+              --query 'length(ApplicationVersions)' \
+              --output text)"
+
+            if [ "${found}" = "1" ]; then
+              break
+            fi
+
+            sleep 5
+          done
+
+          if [ "${found}" != "1" ]; then
+            echo "Elastic Beanstalk version ${version_label} was not visible after waiting." >&2
+            exit 1
+          fi
+
           aws elasticbeanstalk update-environment \
             --environment-name "${EB_ENVIRONMENT_NAME}" \
             --version-label "${version_label}"
 
           aws elasticbeanstalk wait environment-updated \
             --environment-names "${EB_ENVIRONMENT_NAME}"
-
