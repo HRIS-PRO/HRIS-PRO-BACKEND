@@ -1,8 +1,6 @@
 import buildApp from './app';
 import { env } from './config/env';
 
-import { startWorker } from './modules/queue/worker.service';
-
 const start = async () => {
     const app = await buildApp();
 
@@ -11,8 +9,12 @@ const start = async () => {
         console.log(`🚀 Server running on http://localhost:${env.PORT}`);
         console.log(`Using database: ${env.DATABASE_URL.split('@')[1]}`); // Mask credentials
 
-        // Start background queue workers
-        startWorker();
+        if (process.env.ENABLE_WORKER !== 'false') {
+            const { startWorker } = await import('./modules/queue/worker.service');
+            startWorker();
+        } else {
+            console.log('[Worker] Disabled for this runtime');
+        }
 
     } catch (err) {
         app.log.error(err);
