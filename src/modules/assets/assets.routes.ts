@@ -71,4 +71,9 @@ export async function assetsRoutes(app: FastifyInstance) {
         '/:id/lifecycle',
         assetsController.addManualLog.bind(assetsController)
     );
+
+    app.post(
+        '/user/:userId/request-consent',
+        assetsController.resendUserConsent.bind(assetsController)
+    );
 }

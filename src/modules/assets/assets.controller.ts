@@ -127,7 +127,7 @@ export class AssetsController {
         }
     }
 
-    async assignAsset(request: FastifyRequest<{ Params: { id: string }, Body: { assignedTo: string; manager: string; department: string; location: string } }>, reply: FastifyReply) {
+    async assignAsset(request: FastifyRequest<{ Params: { id: string }, Body: { assignedTo: string; manager: string; department: string; location: string; sendConsentMail?: boolean } }>, reply: FastifyReply) {
         try {
             const { id } = request.params;
             const data = request.body;
@@ -136,7 +136,8 @@ export class AssetsController {
                 return reply.status(400).send({ message: 'assignedTo, manager, department, and location are required for assignment' });
             }
 
-            const updatedAsset = await this.assetsService.assignAsset(id, data);
+            const sendConsentMail = data.sendConsentMail !== false;
+            const updatedAsset = await this.assetsService.assignAsset(id, data, undefined, sendConsentMail);
             return reply.send(updatedAsset);
         } catch (error: any) {
             request.log.error(error);
@@ -164,13 +165,14 @@ export class AssetsController {
         }
     }
 
-    async reassignAsset(request: FastifyRequest<{ Params: { id: string }, Body: { assignedTo: string; manager: string; department: string; location: string } }>, reply: FastifyReply) {
+    async reassignAsset(request: FastifyRequest<{ Params: { id: string }, Body: { assignedTo: string; manager: string; department: string; location: string; sendConsentMail?: boolean } }>, reply: FastifyReply) {
         try {
             const { id } = request.params;
             const data = request.body;
 
             // Should verify user is super-admin here or rely on route guard
-            const updatedAsset = await this.assetsService.reassignAsset(id, data);
+            const sendConsentMail = data.sendConsentMail !== false;
+            const updatedAsset = await this.assetsService.reassignAsset(id, data, undefined, sendConsentMail);
             return reply.send(updatedAsset);
         } catch (error: any) {
             request.log.error(error);
@@ -235,6 +237,17 @@ export class AssetsController {
         } catch (error: any) {
             request.log.error(error);
             return reply.status(500).send({ message: error.message || 'Failed to update asset' });
+        }
+    }
+
+    async resendUserConsent(request: FastifyRequest<{ Params: { userId: string } }>, reply: FastifyReply) {
+        try {
+            const { userId } = request.params;
+            const result = await this.assetsService.resendUserConsent(userId);
+            return reply.send(result);
+        } catch (error: any) {
+            request.log.error(error);
+            return reply.status(500).send({ message: error.message || 'Failed to request consent' });
         }
     }
 }
