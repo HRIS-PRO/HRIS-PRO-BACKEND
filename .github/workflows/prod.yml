@@ -18,7 +18,7 @@ env:
   AWS_REGION: eu-central-1
   AWS_ROLE_TO_ASSUME: arn:aws:iam::123890220320:role/GithubActionsDevDeployRole
   EB_APPLICATION_NAME: HRIS-PRO-BACKEND
-  EB_ENVIRONMENT_NAME: HRIS-PRO-BACKEND-prod
+  EB_ENVIRONMENT_NAME: HRIS-PRO-BACKEND-prodd
   EB_BUCKET: elasticbeanstalk-eu-central-1-123890220320
   ECR_REPOSITORY: hrisprobackendprod
   CONTAINER_PORT: "3001"
