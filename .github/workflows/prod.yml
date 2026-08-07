@@ -14,7 +14,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  AWS_ACCOUNT_ID: "742367450316"
+  AWS_ACCOUNT_ID: "123890220320"
   AWS_REGION: eu-central-1
   AWS_ROLE_TO_ASSUME: arn:aws:iam::123890220320:role/GithubActionsDevDeployRole
   EB_APPLICATION_NAME: HRIS-PRO-BACKEND
