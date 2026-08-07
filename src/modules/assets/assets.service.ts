@@ -365,7 +365,7 @@ export class AssetsService {
         }
     }
 
-    async assignAsset(id: string, data: { assignedTo: string; manager: string; department: string; location: string }, actorId?: string) {
+    async assignAsset(id: string, data: { assignedTo: string; manager: string; department: string; location: string }, actorId?: string, sendConsentMail: boolean = true) {
         await this.ensureLocationExists(data.location);
         const targetAsset = await this.db.query.assets.findFirst({ where: eq(assets.id, id) });
         const [updatedAsset] = await this.db.update(assets)
@@ -374,13 +374,13 @@ export class AssetsService {
                 manager: data.manager,
                 department: data.department,
                 location: data.location,
-                status: 'PENDING',
+                status: sendConsentMail ? 'PENDING' : 'ACTIVE',
                 consentSignature: null,
-                hrConsentSubmitted: false
+                hrConsentSubmitted: !sendConsentMail
             })
             .where(eq(assets.id, id))
             .returning();
-            
+
         await this.logLifecycle({
             assetId: updatedAsset.id,
             performedById: actorId,
@@ -394,39 +394,41 @@ export class AssetsService {
             throw new Error(`Asset with id ${id} not found`);
         }
 
-        await this.db.insert(assetActivities).values({
-            type: 'system',
-            title: 'Action Required',
-            desc: `Please accept the assignment for ${updatedAsset.name}.`,
-            icon: 'signature',
-            color: 'amber',
-            roles: ['USER', 'SUPER_ADMIN'],
-            targetUserId: data.assignedTo,
-            assetId: id,
-            hasCTA: true
-        });
+        if (sendConsentMail) {
+            await this.db.insert(assetActivities).values({
+                type: 'system',
+                title: 'Action Required',
+                desc: `Please accept the assignment for ${updatedAsset.name}.`,
+                icon: 'signature',
+                color: 'amber',
+                roles: ['USER', 'SUPER_ADMIN'],
+                targetUserId: data.assignedTo,
+                assetId: id,
+                hasCTA: true
+            });
 
-        // Fetch assignee email
-        const assignee = await this.db.query.users.findFirst({
-            where: eq(users.id, data.assignedTo),
-        });
+            // Fetch assignee email
+            const assignee = await this.db.query.users.findFirst({
+                where: eq(users.id, data.assignedTo),
+            });
 
-        if (assignee) {
-            await sendEmail(
-                assignee.email,
-                'New Asset Assignment Pending Review',
-                `
-                    <h2>Asset Assignment Review</h2>
-                    <p>Hello,</p>
-                    <p>You have been assigned an asset: <strong>${updatedAsset.name}</strong> (${updatedAsset.id}).</p>
-                    <p>Please log in to AssetTrackPro and review this assignment from your dashboard.</p>
-                    <div style="text-align: center;">
-                        <a href="https://assets.noltfinance.com" class="btn">Open AssetTrackPro &rarr;</a>
-                    </div>
-                    <br/>
-                    <p>Best regards,<br/>AssetTrackPro System</p>
-                `
-            ).catch(e => console.error("Email send failed for assignment:", e));
+            if (assignee) {
+                await sendEmail(
+                    assignee.email,
+                    'New Asset Assignment Pending Review',
+                    `
+                        <h2>Asset Assignment Review</h2>
+                        <p>Hello,</p>
+                        <p>You have been assigned an asset: <strong>${updatedAsset.name}</strong> (${updatedAsset.id}).</p>
+                        <p>Please log in to AssetTrackPro and review this assignment from your dashboard.</p>
+                        <div style="text-align: center;">
+                            <a href="https://assets.noltfinance.com" class="btn">Open AssetTrackPro &rarr;</a>
+                        </div>
+                        <br/>
+                        <p>Best regards,<br/>AssetTrackPro System</p>
+                    `
+                ).catch(e => console.error("Email send failed for assignment:", e));
+            }
         }
 
         return updatedAsset;
@@ -489,7 +491,7 @@ export class AssetsService {
         return updatedAssets.filter(Boolean);
     }
 
-    async reassignAsset(id: string, data: { assignedTo: string; manager: string; department: string; location: string }, actorId?: string) {
+    async reassignAsset(id: string, data: { assignedTo: string; manager: string; department: string; location: string }, actorId?: string, sendConsentMail: boolean = true) {
         await this.ensureLocationExists(data.location);
         // const [updatedAsset] = await this.db.update(assets)
         //     .set({
@@ -500,9 +502,9 @@ export class AssetsService {
                 manager: data.manager,
                 department: data.department,
                 location: data.location,
-                status: 'PENDING',
+                status: sendConsentMail ? 'PENDING' : 'ACTIVE',
                 consentSignature: null,
-                hrConsentSubmitted: false
+                hrConsentSubmitted: !sendConsentMail
             })
             .where(eq(assets.id, id))
             .returning();
@@ -520,40 +522,42 @@ export class AssetsService {
             metadata: { oldStatus: targetAsset?.status, newStatus: updatedAsset.status }
         });
 
-        await this.db.insert(assetActivities).values({
-            type: 'system',
-            title: 'Action Required',
-            desc: `Please accept the assignment of ${updatedAsset.name}.`,
-            icon: 'signature',
-            color: 'amber',
-            roles: ['USER', 'SUPER_ADMIN'],
-            targetUserId: data.assignedTo,
-            assetId: id,
-            hasCTA: true
-        });
+        if (sendConsentMail) {
+            await this.db.insert(assetActivities).values({
+                type: 'system',
+                title: 'Action Required',
+                desc: `Please accept the assignment of ${updatedAsset.name}.`,
+                icon: 'signature',
+                color: 'amber',
+                roles: ['USER', 'SUPER_ADMIN'],
+                targetUserId: data.assignedTo,
+                assetId: id,
+                hasCTA: true
+            });
 
-        // Fetch assignee email
-        const assignee = await this.db.query.users.findFirst({
-            where: eq(users.id, data.assignedTo),
-        });
+            // Fetch assignee email
+            const assignee = await this.db.query.users.findFirst({
+                where: eq(users.id, data.assignedTo),
+            });
 
-        if (assignee) {
-            await sendEmail(
-                assignee.email,
-                'New Asset Reassignment Pending Review',
-                `
-                    <h2>Asset Reassignment Review</h2>
-                    <p>Hello,</p>
-                    <p>You have been reassigned an existing asset: <strong>${updatedAsset.name}</strong> (${updatedAsset.id}).</p>
-                    <p>Please log in to AssetTrackPro and accept or report this assignment from your dashboard.</p>
-                    <div style="text-align: center;">
-                        <a href="https://assets.noltfinance.com" class="btn">Open AssetTrackPro &rarr;</a>
-                    </div>
-                    <br/>
-                    <p>Best regards,<br/>AssetTrackPro System</p>
+            if (assignee) {
+                await sendEmail(
+                    assignee.email,
+                    'New Asset Reassignment Pending Review',
+                    `
+                        <h2>Asset Reassignment Review</h2>
+                        <p>Hello,</p>
+                        <p>You have been reassigned an existing asset: <strong>${updatedAsset.name}</strong> (${updatedAsset.id}).</p>
+                        <p>Please log in to AssetTrackPro and accept or report this assignment from your dashboard.</p>
+                        <div style="text-align: center;">
+                            <a href="https://assets.noltfinance.com" class="btn">Open AssetTrackPro &rarr;</a>
+                        </div>
+                        <br/>
+                        <p>Best regards,<br/>AssetTrackPro System</p>
 
-                `
-            ).catch(e => console.error("Email send failed for reassignment:", e));
+                    `
+                ).catch(e => console.error("Email send failed for reassignment:", e));
+            }
         }
 
         return updatedAsset;
@@ -822,5 +826,59 @@ export class AssetsService {
         });
 
         return this.getLifecycleLogs(assetId);
+    }
+
+    async resendUserConsent(targetUserId: string) {
+        const targetAssets = await this.db.query.assets.findMany({
+            where: eq(assets.assignedTo, targetUserId)
+        });
+
+        const assignee = await this.db.query.users.findFirst({
+            where: eq(users.id, targetUserId)
+        });
+
+        if (!assignee) {
+            throw new Error('Assignee user not found');
+        }
+
+        if (targetAssets.length === 0) {
+            return { message: 'No assets currently assigned to this user', count: 0 };
+        }
+
+        for (const asset of targetAssets) {
+            await this.db.update(assets)
+                .set({ status: 'PENDING', hrConsentSubmitted: false })
+                .where(eq(assets.id, asset.id));
+
+            await this.db.insert(assetActivities).values({
+                type: 'system',
+                title: 'Action Required',
+                desc: `Please accept the custody consent for ${asset.name}.`,
+                icon: 'signature',
+                color: 'amber',
+                roles: ['USER', 'SUPER_ADMIN'],
+                targetUserId: targetUserId,
+                assetId: asset.id,
+                hasCTA: true
+            });
+
+            await sendEmail(
+                assignee.email,
+                'Asset Consent Sign-off Requested: ' + asset.name,
+                `
+                    <h2>Asset Custody Consent Request</h2>
+                    <p>Hello ${assignee.firstName || assignee.name || 'Team Member'},</p>
+                    <p>An administrator has requested your formal custody consent sign-off for the assigned asset: <strong>${asset.name}</strong> (${asset.assetNumber || asset.id}).</p>
+                    <p>Please log in to AssetTrackPro and review & sign the custody agreement.</p>
+                    <div style="text-align: center; margin: 20px 0;">
+                        <a href="https://assets.noltfinance.com/consent/${asset.id}" class="btn">Review & Sign Consent &rarr;</a>
+                    </div>
+                    <br/>
+                    <p>Best regards,<br/>AssetTrackPro Operations</p>
+                `
+            ).catch(e => console.error("Email send failed for consent request:", e));
+        }
+
+        return { message: `Consent sign-off request sent for ${targetAssets.length} asset(s)`, count: targetAssets.length };
     }
 }

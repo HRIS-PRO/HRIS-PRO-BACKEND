@@ -1,0 +1,125 @@
+name: Deploy HRIS Pro Backend Dev
+
+on:
+  push:
+    branches: [dev]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: deploy-hris-pro-backend-dev
+  cancel-in-progress: false
+
+env:
+  AWS_ACCOUNT_ID: "742367450316"
+  AWS_REGION: eu-central-1
+  AWS_ROLE_TO_ASSUME: arn:aws:iam::742367450316:role/GithubActionsDevDeployRole
+  EB_APPLICATION_NAME: HRIS-PRO-BACKEND
+  EB_ENVIRONMENT_NAME: HRIS-PRO-BACKEND-dev
+  EB_BUCKET: elasticbeanstalk-eu-central-1-742367450316
+  ECR_REPOSITORY: hrisprobackenddev
+  CONTAINER_PORT: "3001"
+
+jobs:
+  deploy:
+    name: Build image and deploy to Elastic Beanstalk
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Build and push image
+        id: image
+        run: |
+          set -euo pipefail
+
+          ecr_registry="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+          image_tag="${GITHUB_SHA::12}-${GITHUB_RUN_NUMBER}"
+          image_uri="${ecr_registry}/${ECR_REPOSITORY}:${image_tag}"
+          version_label="${ECR_REPOSITORY}-${image_tag}"
+
+          aws ecr get-login-password --region "${AWS_REGION}" \
+            | docker login --username AWS --password-stdin "${ecr_registry}"
+
+          docker build --pull -t "${image_uri}" .
+          docker push "${image_uri}"
+
+          echo "image_uri=${image_uri}" >> "${GITHUB_OUTPUT}"
+          echo "version_label=${version_label}" >> "${GITHUB_OUTPUT}"
+
+      - name: Create Elastic Beanstalk image bundle
+        id: bundle
+        run: |
+          set -euo pipefail
+
+          image_uri="${{ steps.image.outputs.image_uri }}"
+          version_label="${{ steps.image.outputs.version_label }}"
+          s3_key="github-actions/${ECR_REPOSITORY}/${version_label}.zip"
+
+          cat > Dockerrun.aws.json <<JSON
+          {
+            "AWSEBDockerrunVersion": "1",
+            "Image": {
+              "Name": "${image_uri}",
+              "Update": "true"
+            },
+            "Ports": [
+              {
+                "ContainerPort": ${CONTAINER_PORT}
+              }
+            ]
+          }
+          JSON
+
+          zip -q deploy.zip Dockerrun.aws.json
+          aws s3 cp deploy.zip "s3://${EB_BUCKET}/${s3_key}"
+
+          echo "s3_key=${s3_key}" >> "${GITHUB_OUTPUT}"
+
+      - name: Deploy to Elastic Beanstalk
+        run: |
+          set -euo pipefail
+
+          version_label="${{ steps.image.outputs.version_label }}"
+          s3_key="${{ steps.bundle.outputs.s3_key }}"
+
+          aws elasticbeanstalk create-application-version \
+            --application-name "${EB_APPLICATION_NAME}" \
+            --version-label "${version_label}" \
+            --source-bundle S3Bucket="${EB_BUCKET}",S3Key="${s3_key}"
+
+          for attempt in {1..12}; do
+            found="$(aws elasticbeanstalk describe-application-versions \
+              --application-name "${EB_APPLICATION_NAME}" \
+              --version-labels "${version_label}" \
+              --query 'length(ApplicationVersions)' \
+              --output text)"
+
+            if [ "${found}" = "1" ]; then
+              break
+            fi
+
+            sleep 5
+          done
+
+          if [ "${found}" != "1" ]; then
+            echo "Elastic Beanstalk version ${version_label} was not visible after waiting." >&2
+            exit 1
+          fi
+
+          aws elasticbeanstalk update-environment \
+            --environment-name "${EB_ENVIRONMENT_NAME}" \
+            --version-label "${version_label}"
+
+          aws elasticbeanstalk wait environment-updated \
+            --environment-names "${EB_ENVIRONMENT_NAME}"
