@@ -410,6 +410,32 @@ export class AssetsService {
     async assignAsset(id: string, data: { assignedTo: string; manager: string; department: string; location: string }, actorId?: string, sendConsentMail: boolean = true) {
         await this.ensureLocationExists(data.location);
         const targetAsset = await this.db.query.assets.findFirst({ where: eq(assets.id, id) });
+
+        // Rebuild the assetNumber with the correct department mnemonic on first real assignment.
+        // Format is: orgCode / deptCode / catCode / seq  (e.g. NF / GEN / TEST / 001)
+        let updatedAssetNumber = targetAsset?.assetNumber;
+        if (updatedAssetNumber && data.department) {
+            try {
+                // asset.department stores the dept NAME (not UUID). Query by name only.
+                // If it looks like a UUID (rare edge case), also try by id.
+                const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(data.department);
+                const deptRow = await this.db.query.departments.findFirst({
+                    where: isUuid
+                        ? eq(departments.id, data.department)
+                        : eq(departments.name, data.department)
+                });
+                if (deptRow) {
+                    const newDeptCode = (deptRow.mnemonic || deptRow.name.substring(0, 3)).toUpperCase();
+                    const parts = updatedAssetNumber.split('/').map((p: string) => p.trim());
+                    if (parts.length === 4) {
+                        parts[1] = newDeptCode;
+                        updatedAssetNumber = parts.join(' / ');
+                    }
+                }
+            } catch (e) { console.error('[assignAsset] dept lookup failed:', e); }
+        }
+
+
         const [updatedAsset] = await this.db.update(assets)
             .set({
                 assignedTo: data.assignedTo,
@@ -418,7 +444,8 @@ export class AssetsService {
                 location: data.location,
                 status: sendConsentMail ? 'PENDING' : 'ACTIVE',
                 consentSignature: null,
-                hrConsentSubmitted: !sendConsentMail
+                hrConsentSubmitted: !sendConsentMail,
+                ...(updatedAssetNumber ? { assetNumber: updatedAssetNumber } : {})
             })
             .where(eq(assets.id, id))
             .returning();
@@ -535,9 +562,29 @@ export class AssetsService {
 
     async reassignAsset(id: string, data: { assignedTo: string; manager: string; department: string; location: string }, actorId?: string, sendConsentMail: boolean = true) {
         await this.ensureLocationExists(data.location);
-        // const [updatedAsset] = await this.db.update(assets)
-        //     .set({
         const targetAsset = await this.db.query.assets.findFirst({ where: eq(assets.id, id) });
+
+        // Rebuild the assetNumber with the new department's mnemonic
+        let updatedAssetNumber = targetAsset?.assetNumber;
+        if (updatedAssetNumber && data.department) {
+            try {
+                const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(data.department);
+                const deptRow = await this.db.query.departments.findFirst({
+                    where: isUuid
+                        ? eq(departments.id, data.department)
+                        : eq(departments.name, data.department)
+                });
+                if (deptRow) {
+                    const newDeptCode = (deptRow.mnemonic || deptRow.name.substring(0, 3)).toUpperCase();
+                    const parts = updatedAssetNumber.split('/').map((p: string) => p.trim());
+                    if (parts.length === 4) {
+                        parts[1] = newDeptCode;
+                        updatedAssetNumber = parts.join(' / ');
+                    }
+                }
+            } catch (e) { console.error('[reassignAsset] dept lookup failed:', e); }
+        }
+
         const [updatedAsset] = await this.db.update(assets)
             .set({
                 assignedTo: data.assignedTo,
@@ -546,7 +593,8 @@ export class AssetsService {
                 location: data.location,
                 status: sendConsentMail ? 'PENDING' : 'ACTIVE',
                 consentSignature: null,
-                hrConsentSubmitted: !sendConsentMail
+                hrConsentSubmitted: !sendConsentMail,
+                ...(updatedAssetNumber ? { assetNumber: updatedAssetNumber } : {})
             })
             .where(eq(assets.id, id))
             .returning();
