@@ -1,5 +1,5 @@
 import { eq, inArray, and, or, isNull } from 'drizzle-orm';
-import { assets, users, assetActivities, assetLocations, departments, employees, assetLifecycleLogs } from '../../db/schema';
+import { assets, users, assetActivities, assetLocations, departments, employees, assetLifecycleLogs, assetCategories, orgSettings } from '../../db/schema';
 import { AssetLocationsService } from '../asset-locations/asset-locations.service';
 import { supabase } from '../../utils/supabase';
 import { CreateAssetInput } from './assets.schema';
@@ -11,19 +11,61 @@ const assetLocationsService = new AssetLocationsService();
 export class AssetsService {
     constructor(private db: any) { }
 
-    // Generates the next human-facing sequential asset number (AST-NF-00001, AST-NF-00002, ...).
-    // Pass `offset` when allocating several numbers in one batch (e.g. bulk import) so they don't collide.
-    private async generateAssetNumber(offset = 0): Promise<string> {
+    // Generates sequential asset number following: Company / Department / Asset Category / number (e.g. NF / FIN / LAP / 001).
+    private async generateAssetNumber(offset = 0, categoryName?: string, departmentName?: string): Promise<string> {
+        let companyCode = 'NF';
+        try {
+            const orgSetting = await this.db.query.orgSettings.findFirst({
+                where: eq(orgSettings.id, 'singleton')
+            });
+            if (orgSetting?.orgMnemonic) {
+                companyCode = orgSetting.orgMnemonic.toUpperCase();
+            }
+        } catch (e) { /* fallback to default NF */ }
+
+        let catCode = 'GEN';
+        if (categoryName) {
+            try {
+                const catRow = await this.db.query.assetCategories.findFirst({
+                    where: eq(assetCategories.name, categoryName)
+                });
+                if (catRow?.mnemonic) {
+                    catCode = catRow.mnemonic.toUpperCase();
+                } else {
+                    catCode = categoryName.substring(0, 3).toUpperCase();
+                }
+            } catch (e) {
+                catCode = categoryName.substring(0, 3).toUpperCase();
+            }
+        }
+
+        let deptCode = 'GEN';
+        if (departmentName) {
+            try {
+                const deptRow = await this.db.query.departments.findFirst({
+                    where: eq(departments.name, departmentName)
+                });
+                if (deptRow?.mnemonic) {
+                    deptCode = deptRow.mnemonic.toUpperCase();
+                } else {
+                    deptCode = departmentName.substring(0, 3).toUpperCase();
+                }
+            } catch (e) {
+                deptCode = departmentName.substring(0, 3).toUpperCase();
+            }
+        }
+
         const rows = await this.db.select({ n: assets.assetNumber }).from(assets);
         let max = 0;
         for (const r of rows) {
-            const m = /^AST-NF-(\d+)$/.exec(r.n || '');
+            const m = /(\d+)$/.exec((r.n || '').trim());
             if (m) {
                 const val = parseInt(m[1], 10);
                 if (val > max) max = val;
             }
         }
-        return `AST-NF-${String(max + 1 + offset).padStart(5, '0')}`;
+        const seq = String(max + 1 + offset).padStart(3, '0');
+        return `${companyCode} / ${deptCode} / ${catCode} / ${seq}`;
     }
 
     private async logLifecycle(payload: {
@@ -95,8 +137,8 @@ export class AssetsService {
 
         // Generate ID - Always use a unique internal ID
         const assetId = `AST-${Math.floor(100000 + Math.random() * 900000)}`;
-        // Generate the human-facing sequential display number
-        const assetNumber = await this.generateAssetNumber();
+        // Generate the human-facing sequential display number (e.g. NF / FIN / LAP / 001)
+        const assetNumber = await this.generateAssetNumber(0, data.category, data.department);
 
         // Save to Database
         const [newAsset] = await this.db.insert(assets).values({
@@ -247,8 +289,8 @@ export class AssetsService {
 
                 // Generate a unique internal ID for each imported row
                 const assetId = `AST-B-${Math.floor(Math.random() * 16777215).toString(16).toUpperCase()}`;
-                // Allocate the next sequential display number for this batch row
-                const assetNumber = await this.generateAssetNumber(offset);
+                // Allocate the next sequential display number for this batch row (e.g. NF / FIN / LAP / 001)
+                const assetNumber = await this.generateAssetNumber(offset, data.category, data.department);
                 offset++;
 
                 const values = {

@@ -12,6 +12,18 @@ async function assetCategoriesRoutes(app) {
         },
         preHandler: [app.authenticate]
     }, controller.create);
+    app.put('/:id', {
+        schema: {
+            body: asset_categories_schema_1.updateAssetCategorySchema
+        },
+        preHandler: [app.authenticate]
+    }, controller.update);
+    app.patch('/:id', {
+        schema: {
+            body: asset_categories_schema_1.updateAssetCategorySchema
+        },
+        preHandler: [app.authenticate]
+    }, controller.update);
     app.delete('/:id', {
         preHandler: [app.authenticate]
     }, controller.delete);

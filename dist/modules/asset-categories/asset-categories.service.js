@@ -12,6 +12,13 @@ class AssetCategoriesService {
         const [category] = await db_1.db.insert(schema_1.assetCategories).values(data).returning();
         return category;
     }
+    async update(id, data) {
+        const [category] = await db_1.db.update(schema_1.assetCategories)
+            .set({ ...data, updatedAt: new Date() })
+            .where((0, drizzle_orm_1.eq)(schema_1.assetCategories.id, id))
+            .returning();
+        return category;
+    }
     async delete(id) {
         const [category] = await db_1.db.delete(schema_1.assetCategories).where((0, drizzle_orm_1.eq)(schema_1.assetCategories.id, id)).returning();
         return category;
