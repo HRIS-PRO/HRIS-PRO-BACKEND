@@ -1,7 +1,7 @@
 import { db } from '../../db';
 import { assetCategories } from '../../db/schema';
 import { eq } from 'drizzle-orm';
-import { CreateAssetCategoryInput } from './asset-categories.schema';
+import { CreateAssetCategoryInput, UpdateAssetCategoryInput } from './asset-categories.schema';
 
 export class AssetCategoriesService {
     async getAll() {
@@ -10,6 +10,14 @@ export class AssetCategoriesService {
 
     async create(data: CreateAssetCategoryInput) {
         const [category] = await db.insert(assetCategories).values(data).returning();
+        return category;
+    }
+
+    async update(id: string, data: UpdateAssetCategoryInput) {
+        const [category] = await db.update(assetCategories)
+            .set({ ...data, updatedAt: new Date() })
+            .where(eq(assetCategories.id, id))
+            .returning();
         return category;
     }
 

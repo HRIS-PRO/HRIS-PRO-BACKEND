@@ -12,6 +12,10 @@ class AssetCategoriesController {
         const category = await service.create(request.body);
         return reply.code(201).send(category);
     }
+    async update(request, reply) {
+        const category = await service.update(request.params.id, request.body);
+        return reply.send(category);
+    }
     async delete(request, reply) {
         await service.delete(request.params.id);
         return reply.code(204).send();

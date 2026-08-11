@@ -65,6 +65,7 @@ export const userRolesRelations = relations(userRoles, ({ one }) => ({
 export const departments = pgTable("HRIS_DEPARTMENT", {
     id: uuid("id").primaryKey().defaultRandom(),
     name: text("name").notNull(),
+    mnemonic: text("mnemonic"),
     description: text("description"),
     parentId: uuid("parentId"), // Self-reference
     headName: text("headName"),
@@ -212,6 +213,7 @@ export const assetLifecycleLogsRelations = relations(assetLifecycleLogs, ({ one 
 export const assetCategories = pgTable("ASSET_CATEGORY", {
     id: uuid("id").primaryKey().defaultRandom(),
     name: text("name").notNull().unique(),
+    mnemonic: text("mnemonic"),
     managedById: uuid("managedById").references(() => users.id),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
@@ -228,6 +230,7 @@ export const assetLocations = pgTable("ASSET_LOCATION", {
 export const orgSettings = pgTable("ORG_SETTINGS", {
     id: text("id").primaryKey().default("singleton"),
     orgName: text("orgName").notNull().default("AssetTrackPro Enterprise"),
+    orgMnemonic: text("orgMnemonic").notNull().default("NF"),
     contactEmail: text("contactEmail").notNull().default("admin@assettrack.pro"),
     theme: text("theme").notNull().default("default"),
     logoUrl: text("logoUrl"),

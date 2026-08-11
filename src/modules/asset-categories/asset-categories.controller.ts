@@ -1,6 +1,6 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
 import { AssetCategoriesService } from './asset-categories.service';
-import { CreateAssetCategoryInput } from './asset-categories.schema';
+import { CreateAssetCategoryInput, UpdateAssetCategoryInput } from './asset-categories.schema';
 
 const service = new AssetCategoriesService();
 
@@ -13,6 +13,11 @@ export class AssetCategoriesController {
     async create(request: FastifyRequest<{ Body: CreateAssetCategoryInput }>, reply: FastifyReply) {
         const category = await service.create(request.body);
         return reply.code(201).send(category);
+    }
+
+    async update(request: FastifyRequest<{ Params: { id: string }, Body: UpdateAssetCategoryInput }>, reply: FastifyReply) {
+        const category = await service.update(request.params.id, request.body);
+        return reply.send(category);
     }
 
     async delete(request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) {

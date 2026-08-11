@@ -3,6 +3,7 @@ import { departmentStatusEnum } from '../../db/schema';
 
 export const createDepartmentSchema = z.object({
     name: z.string().min(1, 'Department name is required'),
+    mnemonic: z.string().optional().nullable(),
     description: z.string().optional(),
     parentId: z.string().uuid().optional().nullable(),
     headId: z.string().uuid().optional().nullable(),
@@ -15,6 +16,7 @@ export type CreateDepartmentInput = z.infer<typeof createDepartmentSchema>;
 
 export const updateDepartmentSchema = z.object({
     name: z.string().min(1, 'Department name is required').optional(),
+    mnemonic: z.string().optional().nullable(),
     description: z.string().optional(),
     parentId: z.string().uuid().optional().nullable(),
     headId: z.string().uuid().optional().nullable(),
