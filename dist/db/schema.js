@@ -59,6 +59,7 @@ exports.userRolesRelations = (0, drizzle_orm_1.relations)(exports.userRoles, ({ 
 exports.departments = (0, pg_core_1.pgTable)("HRIS_DEPARTMENT", {
     id: (0, pg_core_1.uuid)("id").primaryKey().defaultRandom(),
     name: (0, pg_core_1.text)("name").notNull(),
+    mnemonic: (0, pg_core_1.text)("mnemonic"),
     description: (0, pg_core_1.text)("description"),
     parentId: (0, pg_core_1.uuid)("parentId"), // Self-reference
     headName: (0, pg_core_1.text)("headName"),
@@ -186,6 +187,7 @@ exports.assetLifecycleLogsRelations = (0, drizzle_orm_1.relations)(exports.asset
 exports.assetCategories = (0, pg_core_1.pgTable)("ASSET_CATEGORY", {
     id: (0, pg_core_1.uuid)("id").primaryKey().defaultRandom(),
     name: (0, pg_core_1.text)("name").notNull().unique(),
+    mnemonic: (0, pg_core_1.text)("mnemonic"),
     managedById: (0, pg_core_1.uuid)("managedById").references(() => exports.users.id),
     createdAt: (0, pg_core_1.timestamp)("createdAt").defaultNow().notNull(),
     updatedAt: (0, pg_core_1.timestamp)("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
@@ -200,6 +202,7 @@ exports.assetLocations = (0, pg_core_1.pgTable)("ASSET_LOCATION", {
 exports.orgSettings = (0, pg_core_1.pgTable)("ORG_SETTINGS", {
     id: (0, pg_core_1.text)("id").primaryKey().default("singleton"),
     orgName: (0, pg_core_1.text)("orgName").notNull().default("AssetTrackPro Enterprise"),
+    orgMnemonic: (0, pg_core_1.text)("orgMnemonic").notNull().default("NF"),
     contactEmail: (0, pg_core_1.text)("contactEmail").notNull().default("admin@assettrack.pro"),
     theme: (0, pg_core_1.text)("theme").notNull().default("default"),
     logoUrl: (0, pg_core_1.text)("logoUrl"),

@@ -21,4 +21,5 @@ async function assetsRoutes(app) {
     app.put('/:id', assetsController.updateAsset.bind(assetsController));
     app.get('/:id/lifecycle', assetsController.getLifecycleLogs.bind(assetsController));
     app.post('/:id/lifecycle', assetsController.addManualLog.bind(assetsController));
+    app.post('/user/:userId/request-consent', assetsController.resendUserConsent.bind(assetsController));
 }

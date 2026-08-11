@@ -12,20 +12,64 @@ class AssetsService {
     constructor(db) {
         this.db = db;
     }
-    // Generates the next human-facing sequential asset number (AST-NF-00001, AST-NF-00002, ...).
-    // Pass `offset` when allocating several numbers in one batch (e.g. bulk import) so they don't collide.
-    async generateAssetNumber(offset = 0) {
+    // Generates sequential asset number following: Company / Department / Asset Category / number (e.g. NF / FIN / LAP / 001).
+    async generateAssetNumber(offset = 0, categoryName, departmentName) {
+        let companyCode = 'NF';
+        try {
+            const orgSetting = await this.db.query.orgSettings.findFirst({
+                where: (0, drizzle_orm_1.eq)(schema_1.orgSettings.id, 'singleton')
+            });
+            if (orgSetting?.orgMnemonic) {
+                companyCode = orgSetting.orgMnemonic.toUpperCase();
+            }
+        }
+        catch (e) { /* fallback to default NF */ }
+        let catCode = 'GEN';
+        if (categoryName) {
+            try {
+                const catRow = await this.db.query.assetCategories.findFirst({
+                    where: (0, drizzle_orm_1.eq)(schema_1.assetCategories.name, categoryName)
+                });
+                if (catRow?.mnemonic) {
+                    catCode = catRow.mnemonic.toUpperCase();
+                }
+                else {
+                    catCode = categoryName.substring(0, 3).toUpperCase();
+                }
+            }
+            catch (e) {
+                catCode = categoryName.substring(0, 3).toUpperCase();
+            }
+        }
+        let deptCode = 'GEN';
+        if (departmentName) {
+            try {
+                const deptRow = await this.db.query.departments.findFirst({
+                    where: (0, drizzle_orm_1.eq)(schema_1.departments.name, departmentName)
+                });
+                if (deptRow?.mnemonic) {
+                    deptCode = deptRow.mnemonic.toUpperCase();
+                }
+                else {
+                    deptCode = departmentName.substring(0, 3).toUpperCase();
+                }
+            }
+            catch (e) {
+                deptCode = departmentName.substring(0, 3).toUpperCase();
+            }
+        }
         const rows = await this.db.select({ n: schema_1.assets.assetNumber }).from(schema_1.assets);
         let max = 0;
         for (const r of rows) {
-            const m = /^AST-NF-(\d+)$/.exec(r.n || '');
+            const m = /(\d+)$/.exec((r.n || '').trim());
             if (m) {
                 const val = parseInt(m[1], 10);
                 if (val > max)
                     max = val;
             }
         }
-        return `AST-NF-${String(max + 1 + offset).padStart(5, '0')}`;
+        const seq = String(max + 1 + offset).padStart(3, '0');
+        return `${companyCode} / ${deptCode} / ${catCode} / ${seq}`;
     }
     async logLifecycle(payload) {
         try {
@@ -80,8 +124,8 @@ class AssetsService {
         const cleanSerialNumber = data.serialNumber?.trim() || null;
         // Generate ID - Always use a unique internal ID
         const assetId = `AST-${Math.floor(100000 + Math.random() * 900000)}`;
-        // Generate the human-facing sequential display number
-        const assetNumber = await this.generateAssetNumber();
+        // Generate the human-facing sequential display number (e.g. NF / FIN / LAP / 001)
+        const assetNumber = await this.generateAssetNumber(0, data.category, data.department);
         // Save to Database
         const [newAsset] = await this.db.insert(schema_1.assets).values({
             id: assetId,
@@ -219,8 +263,8 @@ class AssetsService {
                 }
                 // Generate a unique internal ID for each imported row
                 const assetId = `AST-B-${Math.floor(Math.random() * 16777215).toString(16).toUpperCase()}`;
-                // Allocate the next sequential display number for this batch row
-                const assetNumber = await this.generateAssetNumber(offset);
+                // Allocate the next sequential display number for this batch row (e.g. NF / FIN / LAP / 001)
+                const assetNumber = await this.generateAssetNumber(offset, data.category, data.department);
                 offset++;
                 const values = {
                     id: assetId,
@@ -323,7 +367,7 @@ class AssetsService {
             await assetLocationsService.create({ name: locationName });
         }
     }
-    async assignAsset(id, data, actorId) {
+    async assignAsset(id, data, actorId, sendConsentMail = true) {
         await this.ensureLocationExists(data.location);
         const targetAsset = await this.db.query.assets.findFirst({ where: (0, drizzle_orm_1.eq)(schema_1.assets.id, id) });
         const [updatedAsset] = await this.db.update(schema_1.assets)
@@ -332,9 +376,9 @@ class AssetsService {
             manager: data.manager,
             department: data.department,
             location: data.location,
-            status: 'PENDING',
+            status: sendConsentMail ? 'PENDING' : 'ACTIVE',
             consentSignature: null,
-            hrConsentSubmitted: false
+            hrConsentSubmitted: !sendConsentMail
         })
             .where((0, drizzle_orm_1.eq)(schema_1.assets.id, id))
             .returning();
@@ -349,33 +393,35 @@ class AssetsService {
         if (!updatedAsset) {
             throw new Error(`Asset with id ${id} not found`);
         }
-        await this.db.insert(schema_1.assetActivities).values({
-            type: 'system',
-            title: 'Action Required',
-            desc: `Please accept the assignment for ${updatedAsset.name}.`,
-            icon: 'signature',
-            color: 'amber',
-            roles: ['USER', 'SUPER_ADMIN'],
-            targetUserId: data.assignedTo,
-            assetId: id,
-            hasCTA: true
-        });
-        // Fetch assignee email
-        const assignee = await this.db.query.users.findFirst({
-            where: (0, drizzle_orm_1.eq)(schema_1.users.id, data.assignedTo),
-        });
-        if (assignee) {
-            await (0, zepto_1.sendEmail)(assignee.email, 'New Asset Assignment Pending Review', `
-                    <h2>Asset Assignment Review</h2>
-                    <p>Hello,</p>
-                    <p>You have been assigned an asset: <strong>${updatedAsset.name}</strong> (${updatedAsset.id}).</p>
-                    <p>Please log in to AssetTrackPro and review this assignment from your dashboard.</p>
-                    <div style="text-align: center;">
-                        <a href="https://assets.noltfinance.com" class="btn">Open AssetTrackPro &rarr;</a>
-                    </div>
-                    <br/>
-                    <p>Best regards,<br/>AssetTrackPro System</p>
-                `).catch(e => console.error("Email send failed for assignment:", e));
+        if (sendConsentMail) {
+            await this.db.insert(schema_1.assetActivities).values({
+                type: 'system',
+                title: 'Action Required',
+                desc: `Please accept the assignment for ${updatedAsset.name}.`,
+                icon: 'signature',
+                color: 'amber',
+                roles: ['USER', 'SUPER_ADMIN'],
+                targetUserId: data.assignedTo,
+                assetId: id,
+                hasCTA: true
+            });
+            // Fetch assignee email
+            const assignee = await this.db.query.users.findFirst({
+                where: (0, drizzle_orm_1.eq)(schema_1.users.id, data.assignedTo),
+            });
+            if (assignee) {
+                await (0, zepto_1.sendEmail)(assignee.email, 'New Asset Assignment Pending Review', `
+                        <h2>Asset Assignment Review</h2>
+                        <p>Hello,</p>
+                        <p>You have been assigned an asset: <strong>${updatedAsset.name}</strong> (${updatedAsset.id}).</p>
+                        <p>Please log in to AssetTrackPro and review this assignment from your dashboard.</p>
+                        <div style="text-align: center;">
+                            <a href="https://assets.noltfinance.com" class="btn">Open AssetTrackPro &rarr;</a>
+                        </div>
+                        <br/>
+                        <p>Best regards,<br/>AssetTrackPro System</p>
+                    `).catch(e => console.error("Email send failed for assignment:", e));
+            }
         }
         return updatedAsset;
     }
@@ -425,7 +471,7 @@ class AssetsService {
         }));
         return updatedAssets.filter(Boolean);
     }
-    async reassignAsset(id, data, actorId) {
+    async reassignAsset(id, data, actorId, sendConsentMail = true) {
         await this.ensureLocationExists(data.location);
         // const [updatedAsset] = await this.db.update(assets)
         //     .set({
@@ -436,9 +482,9 @@ class AssetsService {
             manager: data.manager,
             department: data.department,
             location: data.location,
-            status: 'PENDING',
+            status: sendConsentMail ? 'PENDING' : 'ACTIVE',
             consentSignature: null,
-            hrConsentSubmitted: false
+            hrConsentSubmitted: !sendConsentMail
         })
             .where((0, drizzle_orm_1.eq)(schema_1.assets.id, id))
             .returning();
@@ -453,34 +499,36 @@ class AssetsService {
             newAssigneeId: updatedAsset.assignedTo,
             metadata: { oldStatus: targetAsset?.status, newStatus: updatedAsset.status }
         });
-        await this.db.insert(schema_1.assetActivities).values({
-            type: 'system',
-            title: 'Action Required',
-            desc: `Please accept the assignment of ${updatedAsset.name}.`,
-            icon: 'signature',
-            color: 'amber',
-            roles: ['USER', 'SUPER_ADMIN'],
-            targetUserId: data.assignedTo,
-            assetId: id,
-            hasCTA: true
-        });
-        // Fetch assignee email
-        const assignee = await this.db.query.users.findFirst({
-            where: (0, drizzle_orm_1.eq)(schema_1.users.id, data.assignedTo),
-        });
-        if (assignee) {
-            await (0, zepto_1.sendEmail)(assignee.email, 'New Asset Reassignment Pending Review', `
-                    <h2>Asset Reassignment Review</h2>
-                    <p>Hello,</p>
-                    <p>You have been reassigned an existing asset: <strong>${updatedAsset.name}</strong> (${updatedAsset.id}).</p>
-                    <p>Please log in to AssetTrackPro and accept or report this assignment from your dashboard.</p>
-                    <div style="text-align: center;">
-                        <a href="https://assets.noltfinance.com" class="btn">Open AssetTrackPro &rarr;</a>
-                    </div>
-                    <br/>
-                    <p>Best regards,<br/>AssetTrackPro System</p>
+        if (sendConsentMail) {
+            await this.db.insert(schema_1.assetActivities).values({
+                type: 'system',
+                title: 'Action Required',
+                desc: `Please accept the assignment of ${updatedAsset.name}.`,
+                icon: 'signature',
+                color: 'amber',
+                roles: ['USER', 'SUPER_ADMIN'],
+                targetUserId: data.assignedTo,
+                assetId: id,
+                hasCTA: true
+            });
+            // Fetch assignee email
+            const assignee = await this.db.query.users.findFirst({
+                where: (0, drizzle_orm_1.eq)(schema_1.users.id, data.assignedTo),
+            });
+            if (assignee) {
+                await (0, zepto_1.sendEmail)(assignee.email, 'New Asset Reassignment Pending Review', `
+                        <h2>Asset Reassignment Review</h2>
+                        <p>Hello,</p>
+                        <p>You have been reassigned an existing asset: <strong>${updatedAsset.name}</strong> (${updatedAsset.id}).</p>
+                        <p>Please log in to AssetTrackPro and accept or report this assignment from your dashboard.</p>
+                        <div style="text-align: center;">
+                            <a href="https://assets.noltfinance.com" class="btn">Open AssetTrackPro &rarr;</a>
+                        </div>
+                        <br/>
+                        <p>Best regards,<br/>AssetTrackPro System</p>
 
-                `).catch(e => console.error("Email send failed for reassignment:", e));
+                    `).catch(e => console.error("Email send failed for reassignment:", e));
+            }
         }
         return updatedAsset;
     }
@@ -709,6 +757,48 @@ class AssetsService {
             metadata: { note }
         });
         return this.getLifecycleLogs(assetId);
+    }
+    async resendUserConsent(targetUserId) {
+        const targetAssets = await this.db.query.assets.findMany({
+            where: (0, drizzle_orm_1.eq)(schema_1.assets.assignedTo, targetUserId)
+        });
+        const assignee = await this.db.query.users.findFirst({
+            where: (0, drizzle_orm_1.eq)(schema_1.users.id, targetUserId)
+        });
+        if (!assignee) {
+            throw new Error('Assignee user not found');
+        }
+        if (targetAssets.length === 0) {
+            return { message: 'No assets currently assigned to this user', count: 0 };
+        }
+        for (const asset of targetAssets) {
+            await this.db.update(schema_1.assets)
+                .set({ status: 'PENDING', hrConsentSubmitted: false })
+                .where((0, drizzle_orm_1.eq)(schema_1.assets.id, asset.id));
+            await this.db.insert(schema_1.assetActivities).values({
+                type: 'system',
+                title: 'Action Required',
+                desc: `Please accept the custody consent for ${asset.name}.`,
+                icon: 'signature',
+                color: 'amber',
+                roles: ['USER', 'SUPER_ADMIN'],
+                targetUserId: targetUserId,
+                assetId: asset.id,
+                hasCTA: true
+            });
+            await (0, zepto_1.sendEmail)(assignee.email, 'Asset Consent Sign-off Requested: ' + asset.name, `
+                    <h2>Asset Custody Consent Request</h2>
+                    <p>Hello ${assignee.firstName || assignee.name || 'Team Member'},</p>
+                    <p>An administrator has requested your formal custody consent sign-off for the assigned asset: <strong>${asset.name}</strong> (${asset.assetNumber || asset.id}).</p>
+                    <p>Please log in to AssetTrackPro and review & sign the custody agreement.</p>
+                    <div style="text-align: center; margin: 20px 0;">
+                        <a href="https://assets.noltfinance.com/consent/${asset.id}" class="btn">Review & Sign Consent &rarr;</a>
+                    </div>
+                    <br/>
+                    <p>Best regards,<br/>AssetTrackPro Operations</p>
+                `).catch(e => console.error("Email send failed for consent request:", e));
+        }
+        return { message: `Consent sign-off request sent for ${targetAssets.length} asset(s)`, count: targetAssets.length };
     }
 }
 exports.AssetsService = AssetsService;

@@ -137,7 +137,8 @@ class AssetsController {
             if (!data.assignedTo || !data.manager || !data.department || !data.location) {
                 return reply.status(400).send({ message: 'assignedTo, manager, department, and location are required for assignment' });
             }
-            const updatedAsset = await this.assetsService.assignAsset(id, data);
+            const sendConsentMail = data.sendConsentMail !== false;
+            const updatedAsset = await this.assetsService.assignAsset(id, data, undefined, sendConsentMail);
             return reply.send(updatedAsset);
         }
         catch (error) {
@@ -167,7 +168,8 @@ class AssetsController {
             const { id } = request.params;
             const data = request.body;
             // Should verify user is super-admin here or rely on route guard
-            const updatedAsset = await this.assetsService.reassignAsset(id, data);
+            const sendConsentMail = data.sendConsentMail !== false;
+            const updatedAsset = await this.assetsService.reassignAsset(id, data, undefined, sendConsentMail);
             return reply.send(updatedAsset);
         }
         catch (error) {
@@ -236,6 +238,17 @@ class AssetsController {
         catch (error) {
             request.log.error(error);
             return reply.status(500).send({ message: error.message || 'Failed to update asset' });
+        }
+    }
+    async resendUserConsent(request, reply) {
+        try {
+            const { userId } = request.params;
+            const result = await this.assetsService.resendUserConsent(userId);
+            return reply.send(result);
+        }
+        catch (error) {
+            request.log.error(error);
+            return reply.status(500).send({ message: error.message || 'Failed to request consent' });
         }
     }
 }
