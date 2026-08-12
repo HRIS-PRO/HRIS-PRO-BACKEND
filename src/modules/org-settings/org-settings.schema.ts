@@ -6,8 +6,10 @@ export const updateOrgSettingsSchema = z.object({
     orgName: z.string().trim().min(2, 'Organization name must be at least 2 characters').max(120).optional(),
     orgMnemonic: z.string().trim().min(1, 'Mnemonic must be at least 1 character').max(20).optional(),
     contactEmail: z.string().trim().email('Invalid contact email').max(160).optional(),
+    hrEmail: z.string().trim().email('Invalid HR email').max(160).optional().nullable(),
     theme: z.enum(THEME_IDS).optional(),
     logoUrl: z.string().trim().nullable().optional(),
 }).refine(data => Object.keys(data).length > 0, { message: 'At least one field is required' });
+
 
 export type UpdateOrgSettingsInput = z.infer<typeof updateOrgSettingsSchema>;

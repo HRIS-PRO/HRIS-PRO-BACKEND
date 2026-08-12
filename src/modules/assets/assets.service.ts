@@ -788,28 +788,16 @@ export class AssetsService {
         const assignee = await this.db.query.users.findFirst({
             where: eq(users.id, asset.assignedTo)
         });
-        
-        const hrDept = await this.db.query.departments.findFirst({
-            where: eq(departments.name, 'Operations & Human Resources')
+
+        // Load HR email from org settings (configured in Settings → Organisation)
+        const settings = await this.db.query.orgSettings.findFirst({
+            where: eq(orgSettings.id, 'singleton')
         });
 
-        let hrEmail = 'divinebuilds123@gmail.com';
-        // if (hrDept && hrDept.headId) {
-        //     const headEmp = await this.db.query.employees.findFirst({
-        //         where: eq(employees.id, hrDept.headId)
-        //     });
-        //     if (headEmp && headEmp.workEmail) {
-        //         hrEmail = headEmp.workEmail;
-        //     } else {
-        //         // Try treating headId as userId
-        //         const headUser = await this.db.query.users.findFirst({
-        //             where: eq(users.id, hrDept.headId)
-        //         });
-        //         if (headUser && headUser.email) {
-        //             hrEmail = headUser.email;
-        //         }
-        //     }
-        // }
+        const hrEmail = settings?.hrEmail || settings?.contactEmail;
+        if (!hrEmail) {
+            throw new Error('No HR email configured. Please set an HR email in Settings → Organisation before sending consent documents.');
+        }
 
         const custodianName = assignee ? (assignee as any).name || (assignee as any).firstName + ' ' + (assignee as any).lastName || assignee.email : 'Unknown Employee';
 
