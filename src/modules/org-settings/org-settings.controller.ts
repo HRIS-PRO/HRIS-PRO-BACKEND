@@ -55,26 +55,42 @@ export class OrgSettingsController {
         }
 
         try {
-            const data = await request.file();
-            if (!data) {
-                return reply.code(400).send({ message: 'No file uploaded' });
+            let buffer: Buffer;
+            let mimetype: string;
+            let filename: string;
+
+            if (request.headers['content-type']?.includes('application/json')) {
+                const body = request.body as { fileBase64?: string; mimetype?: string; filename?: string };
+                if (!body || !body.fileBase64 || !body.mimetype) {
+                    return reply.code(400).send({ message: 'No file uploaded' });
+                }
+                buffer = Buffer.from(body.fileBase64, 'base64');
+                mimetype = body.mimetype;
+                filename = body.filename || 'logo.png';
+            } else {
+                const data = await request.file();
+                if (!data) {
+                    return reply.code(400).send({ message: 'No file uploaded' });
+                }
+                buffer = await data.toBuffer();
+                mimetype = data.mimetype;
+                filename = data.filename;
             }
 
-            if (!ALLOWED_LOGO_MIME_TYPES.includes(data.mimetype)) {
+            if (!ALLOWED_LOGO_MIME_TYPES.includes(mimetype)) {
                 return reply.code(400).send({ message: 'Unsupported file type. Please upload a PNG, JPG, SVG, or WebP image.' });
             }
 
-            const buffer = await data.toBuffer();
             if (buffer.length > MAX_LOGO_SIZE_BYTES) {
                 return reply.code(400).send({ message: 'Logo image size must be less than 2MB' });
             }
 
-            const extension = data.filename.split('.').pop() || 'png';
+            const extension = filename.split('.').pop() || 'png';
             const uniqueFilename = `org-logo-${crypto.randomUUID()}.${extension}`;
             const path = `org-branding/${uniqueFilename}`;
 
             const uploadResult = await StorageService.uploadFile(
-                { buffer, mimetype: data.mimetype },
+                { buffer, mimetype },
                 path,
                 'AssetTracker'
             );
