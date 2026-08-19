@@ -240,6 +240,7 @@ export const orgSettings = pgTable("ORG_SETTINGS", {
     updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
 });
 
+
 export const assetReports = pgTable("ASSET_REPORT", {
     id: uuid("id").primaryKey().defaultRandom(),
     assetId: text("assetId").notNull().references(() => assets.id),
