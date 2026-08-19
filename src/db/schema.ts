@@ -232,7 +232,7 @@ export const orgSettings = pgTable("ORG_SETTINGS", {
     orgName: text("orgName").notNull().default("AssetTrackPro Enterprise"),
     orgMnemonic: text("orgMnemonic").notNull().default("NF"),
     contactEmail: text("contactEmail").notNull().default("admin@assettrack.pro"),
-    hrEmail: text("hrEmail"),  // HR department email for consent document routing
+    hrEmails: jsonb("hrEmails").default([]).notNull(),
     theme: text("theme").notNull().default("default"),
     logoUrl: text("logoUrl"),
     updatedById: uuid("updatedById").references(() => users.id),

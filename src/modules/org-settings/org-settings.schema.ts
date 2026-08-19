@@ -9,6 +9,7 @@ export const updateOrgSettingsSchema = z.object({
     hrEmail: z.string().trim().email('Invalid HR email').max(160).optional().nullable(),
     theme: z.enum(THEME_IDS).optional(),
     logoUrl: z.string().trim().nullable().optional(),
+    hrEmails: z.array(z.string().email('Invalid email address')).max(5, 'Maximum of 5 emails allowed').optional(),
 }).refine(data => Object.keys(data).length > 0, { message: 'At least one field is required' });
 
 

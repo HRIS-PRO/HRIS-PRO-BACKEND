@@ -5,6 +5,7 @@ import { CreateEmployeeInput, AssignRoleInput } from './employees.schema';
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import { sendEmail } from '../shared/zepto';
+import { buildAssetAppInviteEmail } from '../shared/asset-email-templates';
 
 type DrizzleClient = typeof db;
 
@@ -164,18 +165,37 @@ export class EmployeesService {
         });
 
         if (existing) {
-            // Update
+            // Update existing role
             const [updated] = await this.db.update(userRoles).set({
                 role: roleName
             }).where(eq(userRoles.id, existing.id)).returning();
             return updated;
         } else {
-            // Insert new
+            // Insert new role
             const [inserted] = await this.db.insert(userRoles).values({
                 userId: employee.userId,
-                app: appName as any, // Type cast or ensure schema enum matches
+                app: appName as any,
                 role: roleName
             }).returning();
+
+            // Send branded invite email when user is first added to the Asset Tracker app
+            if (appName === 'ASSET_TRACKER') {
+                try {
+                    const user = await this.db.query.users.findFirst({ where: eq(users.id, employee.userId) });
+                    const emp = await this.db.query.employees.findFirst({ where: eq(employees.userId, employee.userId) });
+                    if (user) {
+                        const firstName = emp?.firstName || user.email.split('@')[0];
+                        sendEmail(
+                            user.email,
+                            "You've Been Invited to the NOLT Asset App",
+                            buildAssetAppInviteEmail(firstName)
+                        ).catch(e => console.error('[assignEmployeeRole] invite email failed:', e));
+                    }
+                } catch (e) {
+                    console.error('[assignEmployeeRole] failed to send invite email:', e);
+                }
+            }
+
             return inserted;
         }
     }
