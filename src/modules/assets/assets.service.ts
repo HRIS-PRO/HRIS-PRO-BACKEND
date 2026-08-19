@@ -4,6 +4,7 @@ import { AssetLocationsService } from '../asset-locations/asset-locations.servic
 import { supabase } from '../../utils/supabase';
 import { CreateAssetInput } from './assets.schema';
 import { sendEmail } from '../shared/zepto';
+import { buildAssetAppInviteEmail, buildConsentRequestEmail, buildAssetReallocationEmail, buildConsentSignedEmail } from '../shared/asset-email-templates';
 
 const assetLocationsService = new AssetLocationsService();
 
@@ -198,22 +199,17 @@ export class AssetsService {
             });
 
             if (assignee) {
+                const assigneeFirst = (assignee as any).firstName || (assignee as any).name || assignee.email.split('@')[0];
                 await sendEmail(
                     assignee.email,
-                    'New Asset Assignment Pending Review',
-                    `
-                        <h2>Asset Assignment Review</h2>
-                        <p>Hello,</p>
-                        <p>You have been assigned a new asset: <strong>${data.name}</strong> (${assetId}).</p>
-                        <p>Please log in to AssetTrackPro and accept or report this assignment from your dashboard.</p>
-                        <div style="text-align: center;">
-                            <a href="https://assets.noltfinance.com" class="btn">Open AssetTrackPro &rarr;</a>
-                        </div>
-                        ${fileUrl ? `<p><a href="${fileUrl}">View Attached Image/Receipt</a></p>` : ''}
-                        <br/>
-                        <p>Best regards,<br/>AssetTrackPro System</p>
-
-                    `
+                    'Action Required — Your Consent Is Needed',
+                    buildConsentRequestEmail({
+                        firstName: assigneeFirst,
+                        serialNumber: newAsset.serialNumber || newAsset.id,
+                        laptopModel: newAsset.modelNumber || newAsset.name,
+                        laptopSpecs: newAsset.description || newAsset.condition || 'N/A',
+                        consentUrl: `https://asset.noltfinance.com/consent/${newAsset.id}`
+                    })
                 ).catch(e => console.error("Email send failed:", e));
             }
         }
@@ -482,20 +478,17 @@ export class AssetsService {
             });
 
             if (assignee) {
+                const assigneeFirst = (assignee as any).firstName || (assignee as any).name || assignee.email.split('@')[0];
                 await sendEmail(
                     assignee.email,
-                    'New Asset Assignment Pending Review',
-                    `
-                        <h2>Asset Assignment Review</h2>
-                        <p>Hello,</p>
-                        <p>You have been assigned an asset: <strong>${updatedAsset.name}</strong> (${updatedAsset.id}).</p>
-                        <p>Please log in to AssetTrackPro and review this assignment from your dashboard.</p>
-                        <div style="text-align: center;">
-                            <a href="https://assets.noltfinance.com" class="btn">Open AssetTrackPro &rarr;</a>
-                        </div>
-                        <br/>
-                        <p>Best regards,<br/>AssetTrackPro System</p>
-                    `
+                    'Action Required — Your Consent Is Needed',
+                    buildConsentRequestEmail({
+                        firstName: assigneeFirst,
+                        serialNumber: updatedAsset.serialNumber || updatedAsset.id,
+                        laptopModel: updatedAsset.modelNumber || updatedAsset.name,
+                        laptopSpecs: updatedAsset.description || updatedAsset.condition || 'N/A',
+                        consentUrl: `https://asset.noltfinance.com/consent/${updatedAsset.id}`
+                    })
                 ).catch(e => console.error("Email send failed for assignment:", e));
             }
         }
@@ -536,20 +529,17 @@ export class AssetsService {
                     });
 
                     if (assignee) {
+                        const assigneeFirst = (assignee as any).firstName || (assignee as any).name || assignee.email.split('@')[0];
                         await sendEmail(
                             assignee.email,
-                            'New Asset Assignment Pending Review',
-                            `
-                                <h2>Asset Assignment Review</h2>
-                                <p>Hello,</p>
-                                <p>You have been assigned an asset: <strong>${updated.name}</strong> (${updated.id}).</p>
-                                <p>Please log in to AssetTrackPro and review this assignment from your dashboard.</p>
-                                <div style="text-align: center;">
-                                    <a href="https://assets.noltfinance.com" class="btn">Open AssetTrackPro &rarr;</a>
-                                </div>
-                                <br/>
-                                <p>Best regards,<br/>AssetTrackPro System</p>
-                            `
+                            'Action Required — Your Consent Is Needed',
+                            buildConsentRequestEmail({
+                                firstName: assigneeFirst,
+                                serialNumber: updated.serialNumber || updated.id,
+                                laptopModel: updated.modelNumber || updated.name,
+                                laptopSpecs: updated.description || updated.condition || 'N/A',
+                                consentUrl: `https://asset.noltfinance.com/consent/${updated.id}`
+                            })
                         ).catch(e => console.error("Email send failed for bulk assignment:", e));
                     }
                 }
@@ -631,22 +621,38 @@ export class AssetsService {
             });
 
             if (assignee) {
+                const assigneeFirst = (assignee as any).firstName || (assignee as any).name || assignee.email.split('@')[0];
+                const assigneeName = `${(assignee as any).firstName || ''} ${(assignee as any).lastName || ''}`.trim() || (assignee as any).name || assignee.email;
+
+                // Branded consent email to the staff member
                 await sendEmail(
                     assignee.email,
-                    'New Asset Reassignment Pending Review',
-                    `
-                        <h2>Asset Reassignment Review</h2>
-                        <p>Hello,</p>
-                        <p>You have been reassigned an existing asset: <strong>${updatedAsset.name}</strong> (${updatedAsset.id}).</p>
-                        <p>Please log in to AssetTrackPro and accept or report this assignment from your dashboard.</p>
-                        <div style="text-align: center;">
-                            <a href="https://assets.noltfinance.com" class="btn">Open AssetTrackPro &rarr;</a>
-                        </div>
-                        <br/>
-                        <p>Best regards,<br/>AssetTrackPro System</p>
-
-                    `
+                    'Action Required — Your Consent Is Needed',
+                    buildConsentRequestEmail({
+                        firstName: assigneeFirst,
+                        serialNumber: updatedAsset.serialNumber || updatedAsset.id,
+                        laptopModel: updatedAsset.modelNumber || updatedAsset.name,
+                        laptopSpecs: updatedAsset.description || updatedAsset.condition || 'N/A',
+                        consentUrl: `https://asset.noltfinance.com/consent/${updatedAsset.id}`
+                    })
                 ).catch(e => console.error("Email send failed for reassignment:", e));
+
+                // Branded reallocation notification to assets@noltfinance.com
+                const approvalDate = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' });
+                await sendEmail(
+                    'assets@noltfinance.com',
+                    `Asset Reallocation Notification – ${assigneeName}`,
+                    buildAssetReallocationEmail({
+                        staffName: assigneeName,
+                        oldSerialNumber: targetAsset?.serialNumber || 'N/A',
+                        newSerialNumber: updatedAsset.serialNumber || updatedAsset.id,
+                        laptopModel: updatedAsset.modelNumber || updatedAsset.name,
+                        laptopSpecs: updatedAsset.description || updatedAsset.condition || 'N/A',
+                        reason: 'Asset reallocation via AssetTrackPro',
+                        approvedBy: actorId ? 'Administrator' : 'System',
+                        approvalDate
+                    })
+                ).catch(e => console.error("Email send failed for reallocation notification:", e));
             }
         }
 
@@ -789,27 +795,12 @@ export class AssetsService {
             where: eq(users.id, asset.assignedTo)
         });
         
-        const hrDept = await this.db.query.departments.findFirst({
-            where: eq(departments.name, 'Operations & Human Resources')
+        const orgSetting = await this.db.query.orgSettings.findFirst({
+            where: eq(orgSettings.id, 'singleton')
         });
-
-        let hrEmail = 'divinebuilds123@gmail.com';
-        // if (hrDept && hrDept.headId) {
-        //     const headEmp = await this.db.query.employees.findFirst({
-        //         where: eq(employees.id, hrDept.headId)
-        //     });
-        //     if (headEmp && headEmp.workEmail) {
-        //         hrEmail = headEmp.workEmail;
-        //     } else {
-        //         // Try treating headId as userId
-        //         const headUser = await this.db.query.users.findFirst({
-        //             where: eq(users.id, hrDept.headId)
-        //         });
-        //         if (headUser && headUser.email) {
-        //             hrEmail = headUser.email;
-        //         }
-        //     }
-        // }
+        const hrEmails: string[] = Array.isArray(orgSetting?.hrEmails) && orgSetting.hrEmails.length > 0 
+            ? orgSetting.hrEmails 
+            : ['divinebuilds123@gmail.com'];
 
         const custodianName = assignee ? (assignee as any).name || (assignee as any).firstName + ' ' + (assignee as any).lastName || assignee.email : 'Unknown Employee';
 
@@ -819,26 +810,18 @@ export class AssetsService {
             name: `Asset_Custody_Agreement_${asset.id}.pdf`
         }] : undefined;
 
-        await sendEmail(
-            hrEmail,
-            'Asset Consent Signed: ' + asset.name,
-            `
-                <h2>Asset Consent Signed</h2>
-                <p>Hello HR,</p>
-                <p><strong>${custodianName}</strong> has signed the consent form for the assigned asset: <strong>${asset.name}</strong> (${asset.id}).</p>
-                <p>You can view the signed document in the AssetTrackPro dashboard, or see the attached PDF generated directly from the frontend.</p>
-                <div style="text-align: center;">
-                    <a href="https://assets.noltfinance.com/consent/${asset.id}/document" class="btn">View Online Document &rarr;</a>
-                </div>
-                <br/>
-                <p>Best regards,<br/>AssetTrackPro System</p>
-            `,
-            'Asset Consent Executed',
-            'AssetTrackPro System',
-            undefined,
-            'AssetTrackPro',
-            attachments
-        ).catch(e => console.error("Email send failed for HR Consent:", e));
+        await Promise.all(hrEmails.map(email => 
+            sendEmail(
+                email,
+                'Asset Consent Signed: ' + asset.name,
+                buildConsentSignedEmail(custodianName, asset.name, asset.id),
+                'Asset Consent Executed',
+                'AssetTrackPro System',
+                undefined,
+                'AssetTrackPro',
+                attachments
+            ).catch(e => console.error("Email send failed for HR Consent to " + email + ":", e))
+        ));
 
         const [updatedAsset] = await this.db.update(assets)
             .set({ hrConsentSubmitted: true })
@@ -952,20 +935,17 @@ export class AssetsService {
                 hasCTA: true
             });
 
+            const staffFirst = (assignee as any).firstName || (assignee as any).name || assignee.email.split('@')[0];
             await sendEmail(
                 assignee.email,
-                'Asset Consent Sign-off Requested: ' + asset.name,
-                `
-                    <h2>Asset Custody Consent Request</h2>
-                    <p>Hello ${assignee.firstName || assignee.name || 'Team Member'},</p>
-                    <p>An administrator has requested your formal custody consent sign-off for the assigned asset: <strong>${asset.name}</strong> (${asset.assetNumber || asset.id}).</p>
-                    <p>Please log in to AssetTrackPro and review & sign the custody agreement.</p>
-                    <div style="text-align: center; margin: 20px 0;">
-                        <a href="https://assets.noltfinance.com/consent/${asset.id}" class="btn">Review & Sign Consent &rarr;</a>
-                    </div>
-                    <br/>
-                    <p>Best regards,<br/>AssetTrackPro Operations</p>
-                `
+                'Action Required — Your Consent Is Needed',
+                buildConsentRequestEmail({
+                    firstName: staffFirst,
+                    serialNumber: asset.serialNumber || asset.id,
+                    laptopModel: asset.modelNumber || asset.name,
+                    laptopSpecs: asset.description || asset.condition || 'N/A',
+                    consentUrl: `https://asset.noltfinance.com/consent/${asset.id}`
+                })
             ).catch(e => console.error("Email send failed for consent request:", e));
         }
 

@@ -17,41 +17,49 @@ export async function sendEmail(
     appName: string = 'HRIS Pro',
     attachments?: { content: string; mime_type: string; name: string }[]
 ) {
-    // Basic HTML Wrapper for professional look
-    // The hidden div explicitly injects the preheader text right at the start of the body for Gmail/email clients
-    const wrapper = `
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <style>
-            body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f4f4; margin: 0; padding: 0; }
-            .container { max-width: 600px; margin: 20px auto; background: #ffffff; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); overflow: hidden; }
-            .header { background: #4F46E5; color: #ffffff; padding: 20px; text-align: center; }
-            .header h1 { margin: 0; font-size: 24px; }
-            .content { padding: 30px; color: #333333; line-height: 1.6; }
-            .footer { background: #f9fafb; padding: 15px; text-align: center; font-size: 12px; color: #666666; }
-            .otp-code { font-size: 32px; font-weight: bold; letter-spacing: 5px; color: #4F46E5; text-align: center; margin: 20px 0; }
-            .btn { display: inline-block; background-color: #4F46E5; color: #ffffff !important; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 14px; margin: 20px 0; }
-        </style>
-    </head>
-    <body>
-        <div style="display:none;font-size:1px;color:#333333;line-height:1px;max-height:0px;max-width:0px;opacity:0;overflow:hidden;">
-            ${preheader}
-        </div>
-        <div class="container">
-            <div class="header">
-                <h1>${appName}</h1>
+    // Check if the provided content is already a full HTML document
+    const isFullHtml = htmlContent.trim().toLowerCase().startsWith('<!doctype html>') || 
+                       htmlContent.trim().toLowerCase().startsWith('<html');
+
+    let finalHtmlBody = htmlContent;
+
+    if (!isFullHtml) {
+        // Basic HTML Wrapper for professional look
+        // The hidden div explicitly injects the preheader text right at the start of the body for Gmail/email clients
+        finalHtmlBody = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <style>
+                body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f4f4; margin: 0; padding: 0; }
+                .container { max-width: 600px; margin: 20px auto; background: #ffffff; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); overflow: hidden; }
+                .header { background: #4F46E5; color: #ffffff; padding: 20px; text-align: center; }
+                .header h1 { margin: 0; font-size: 24px; }
+                .content { padding: 30px; color: #333333; line-height: 1.6; }
+                .footer { background: #f9fafb; padding: 15px; text-align: center; font-size: 12px; color: #666666; }
+                .otp-code { font-size: 32px; font-weight: bold; letter-spacing: 5px; color: #4F46E5; text-align: center; margin: 20px 0; }
+                .btn { display: inline-block; background-color: #4F46E5; color: #ffffff !important; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 14px; margin: 20px 0; }
+            </style>
+        </head>
+        <body>
+            <div style="display:none;font-size:1px;color:#333333;line-height:1px;max-height:0px;max-width:0px;opacity:0;overflow:hidden;">
+                ${preheader}
             </div>
-            <div class="content">
-                ${htmlContent}
+            <div class="container">
+                <div class="header">
+                    <h1>${appName}</h1>
+                </div>
+                <div class="content">
+                    ${htmlContent}
+                </div>
+                <div class="footer">
+                    &copy; ${new Date().getFullYear()} ${appName}. All rights reserved.
+                </div>
             </div>
-            <div class="footer">
-                &copy; ${new Date().getFullYear()} ${appName}. All rights reserved.
-            </div>
-        </div>
-    </body>
-    </html>
-    `;
+        </body>
+        </html>
+        `;
+    }
 
     if (env.NODE_ENV === 'test') {
         console.log(`[TEST] Email to ${to}: ${subject}`);
@@ -68,7 +76,7 @@ export async function sendEmail(
             },
         ],
         subject,
-        htmlbody: wrapper,
+        htmlbody: finalHtmlBody,
         ...(attachments && attachments.length > 0 ? { attachments } : {})
     };
 
