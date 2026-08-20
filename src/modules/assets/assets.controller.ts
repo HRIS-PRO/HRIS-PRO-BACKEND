@@ -190,6 +190,17 @@ export class AssetsController {
             return reply.status(500).send({ message: error.message || 'Failed to decommission asset' });
         }
     }
+
+    async markAssetMaintenance(request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) {
+        try {
+            const { id } = request.params;
+            const updatedAsset = await this.assetsService.markAssetMaintenance(id);
+            return reply.send(updatedAsset);
+        } catch (error: any) {
+            request.log.error(error);
+            return reply.status(500).send({ message: error.message || 'Failed to mark asset for maintenance' });
+        }
+    }
     async unassignAsset(request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) {
         try {
             const { id } = request.params;

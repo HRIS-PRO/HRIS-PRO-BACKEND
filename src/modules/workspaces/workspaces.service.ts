@@ -249,9 +249,8 @@ export class WorkspacesService {
                     with: { employee: true },
                 });
                 if (user) {
-                    const recipientName = (user as any)?.employee
-                        ? `${(user as any).employee.firstName} ${(user as any).employee.surname}`
-                        : user.email;
+                    const rawName = (user as any)?.employee?.firstName || user.email.split('@')[0];
+                    const recipientFirstName = rawName.split(' ')[0].charAt(0).toUpperCase() + rawName.split(' ')[0].slice(1);
 
                     const emailHtml = `
                         <div style="line-height:1.8;color:#1a1a2e">
@@ -260,7 +259,7 @@ export class WorkspacesService {
                                 <p style="color:rgba(255,255,255,0.85);margin-top:8px;font-size:14px">You've been added to a MsgScale workspace</p>
                             </div>
                             <div style="padding:40px 32px">
-                                <p style="font-size:16px">Hi <strong>${recipientName}</strong>,</p>
+                                <p style="font-size:16px">Hi ${recipientFirstName},</p>
                                 <p><strong>${inviterName}</strong> has invited you to join the <strong style="color:#667eea">"${workspace.title}"</strong> workspace on MsgScale.</p>
                                 <div style="background:#f5f3ff;border-left:4px solid #667eea;padding:16px 20px;border-radius:8px;margin:24px 0">
                                     <p style="margin:0;font-size:12px;color:#6d28d9;font-weight:700;text-transform:uppercase;letter-spacing:1px">Workspace Details</p>
