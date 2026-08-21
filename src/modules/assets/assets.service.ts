@@ -1,4 +1,4 @@
-import { eq, inArray, and, or, isNull } from 'drizzle-orm';
+import { eq, inArray, and, or, isNull, sql } from 'drizzle-orm';
 import { assets, users, assetActivities, assetLocations, departments, employees, assetLifecycleLogs, assetCategories, orgSettings } from '../../db/schema';
 import { AssetLocationsService } from '../asset-locations/asset-locations.service';
 import { supabase } from '../../utils/supabase';
@@ -7,6 +7,35 @@ import { sendEmail } from '../shared/zepto';
 import { buildAssetAppInviteEmail, buildConsentRequestEmail, buildAssetReallocationEmail, buildConsentSignedEmail } from '../shared/asset-email-templates';
 
 const assetLocationsService = new AssetLocationsService();
+
+function formatAssetSpecs(asset: { description?: string | null; category?: string | null; condition?: string | null; name?: string | null }): string {
+    const desc = asset.description?.trim();
+    if (desc && !/^(batch import|import|n\/a)$/i.test(desc) && desc.length > 2) {
+        return desc;
+    }
+    const cat = asset.category || 'Workstation Equipment';
+    const cond = asset.condition || 'Good';
+    return `${cat} • ${cond} Condition`;
+}
+
+function resolveStaffFirstName(assigneeUser?: any, assignedToVal?: string | null, empRecord?: any): string {
+    if (empRecord && empRecord.firstName && empRecord.firstName.trim().length > 0) {
+        return empRecord.firstName.trim();
+    }
+    if (assigneeUser && assigneeUser.employee && assigneeUser.employee.firstName && assigneeUser.employee.firstName.trim().length > 0) {
+        return assigneeUser.employee.firstName.trim();
+    }
+    const rawEmail = assigneeUser?.email || (assignedToVal && assignedToVal.includes('@') ? assignedToVal : null);
+    if (rawEmail) {
+        const prefix = rawEmail.split('@')[0].replace(/[._-]/g, ' ');
+        const words = prefix.split(' ').filter(Boolean);
+        if (words.length > 0) {
+            const cleanWord = words.find((w: string) => w.length > 1) || words[0];
+            return cleanWord.charAt(0).toUpperCase() + cleanWord.slice(1).toLowerCase();
+        }
+    }
+    return 'Team Member';
+}
 
 
 export class AssetsService {
@@ -196,19 +225,21 @@ export class AssetsService {
             // Fetch assignee email
             const assignee = await this.db.query.users.findFirst({
                 where: eq(users.id, cleanAssignedTo),
+                with: { employee: true }
             });
 
             if (assignee) {
-                const assigneeFirst = (assignee as any).firstName || (assignee as any).name || assignee.email.split('@')[0];
+                const assigneeEmp = (assignee as any).employee;
+                const assigneeFirst = resolveStaffFirstName(assignee, cleanAssignedTo, assigneeEmp);
                 await sendEmail(
                     assignee.email,
                     'Action Required — Your Consent Is Needed',
                     buildConsentRequestEmail({
                         firstName: assigneeFirst,
                         serialNumber: newAsset.serialNumber || newAsset.id,
-                        laptopModel: newAsset.modelNumber || newAsset.name,
-                        laptopSpecs: newAsset.description || newAsset.condition || 'N/A',
-                        consentUrl: `https://asset.noltfinance.com/consent/${newAsset.id}`
+                        laptopModel: newAsset.name,
+                        laptopSpecs: formatAssetSpecs(newAsset),
+                        consentUrl: `https://assets.noltfinance.com/#/consent/${newAsset.id}`
                     })
                 ).catch(e => console.error("Email send failed:", e));
             }
@@ -475,19 +506,21 @@ export class AssetsService {
             // Fetch assignee email
             const assignee = await this.db.query.users.findFirst({
                 where: eq(users.id, data.assignedTo),
+                with: { employee: true }
             });
 
             if (assignee) {
-                const assigneeFirst = (assignee as any).firstName || (assignee as any).name || assignee.email.split('@')[0];
+                const assigneeEmp = (assignee as any).employee;
+                const assigneeFirst = resolveStaffFirstName(assignee, data.assignedTo, assigneeEmp);
                 await sendEmail(
                     assignee.email,
                     'Action Required — Your Consent Is Needed',
                     buildConsentRequestEmail({
                         firstName: assigneeFirst,
                         serialNumber: updatedAsset.serialNumber || updatedAsset.id,
-                        laptopModel: updatedAsset.modelNumber || updatedAsset.name,
-                        laptopSpecs: updatedAsset.description || updatedAsset.condition || 'N/A',
-                        consentUrl: `https://asset.noltfinance.com/consent/${updatedAsset.id}`
+                        laptopModel: updatedAsset.name,
+                        laptopSpecs: formatAssetSpecs(updatedAsset),
+                        consentUrl: `https://assets.noltfinance.com/#/consent/${updatedAsset.id}`
                     })
                 ).catch(e => console.error("Email send failed for assignment:", e));
             }
@@ -526,19 +559,21 @@ export class AssetsService {
 
                     const assignee = await this.db.query.users.findFirst({
                         where: eq(users.id, data.assignedTo),
+                        with: { employee: true }
                     });
 
                     if (assignee) {
-                        const assigneeFirst = (assignee as any).firstName || (assignee as any).name || assignee.email.split('@')[0];
+                        const assigneeEmp = (assignee as any).employee;
+                        const assigneeFirst = resolveStaffFirstName(assignee, data.assignedTo, assigneeEmp);
                         await sendEmail(
                             assignee.email,
                             'Action Required — Your Consent Is Needed',
                             buildConsentRequestEmail({
                                 firstName: assigneeFirst,
                                 serialNumber: updated.serialNumber || updated.id,
-                                laptopModel: updated.modelNumber || updated.name,
-                                laptopSpecs: updated.description || updated.condition || 'N/A',
-                                consentUrl: `https://asset.noltfinance.com/consent/${updated.id}`
+                                laptopModel: updated.name,
+                                laptopSpecs: formatAssetSpecs(updated),
+                                consentUrl: `https://assets.noltfinance.com/#/consent/${updated.id}`
                             })
                         ).catch(e => console.error("Email send failed for bulk assignment:", e));
                     }
@@ -618,11 +653,13 @@ export class AssetsService {
             // Fetch assignee email
             const assignee = await this.db.query.users.findFirst({
                 where: eq(users.id, data.assignedTo),
+                with: { employee: true }
             });
 
             if (assignee) {
-                const assigneeFirst = (assignee as any).firstName || (assignee as any).name || assignee.email.split('@')[0];
-                const assigneeName = `${(assignee as any).firstName || ''} ${(assignee as any).lastName || ''}`.trim() || (assignee as any).name || assignee.email;
+                const assigneeEmp = (assignee as any).employee;
+                const assigneeFirst = resolveStaffFirstName(assignee, data.assignedTo, assigneeEmp);
+                const assigneeName = assigneeEmp ? `${assigneeEmp.firstName} ${assigneeEmp.surname}`.trim() : assignee.email;
 
                 // Branded consent email to the staff member
                 await sendEmail(
@@ -631,9 +668,9 @@ export class AssetsService {
                     buildConsentRequestEmail({
                         firstName: assigneeFirst,
                         serialNumber: updatedAsset.serialNumber || updatedAsset.id,
-                        laptopModel: updatedAsset.modelNumber || updatedAsset.name,
-                        laptopSpecs: updatedAsset.description || updatedAsset.condition || 'N/A',
-                        consentUrl: `https://asset.noltfinance.com/consent/${updatedAsset.id}`
+                        laptopModel: updatedAsset.name,
+                        laptopSpecs: formatAssetSpecs(updatedAsset),
+                        consentUrl: `https://assets.noltfinance.com/#/consent/${updatedAsset.id}`
                     })
                 ).catch(e => console.error("Email send failed for reassignment:", e));
 
@@ -659,7 +696,7 @@ export class AssetsService {
         return updatedAsset;
     }
 
-    async decommissionAsset(id: string) {
+    async decommissionAsset(id: string, actorId?: string) {
         const targetAsset = await this.db.query.assets.findFirst({ where: eq(assets.id, id) });
         const [updatedAsset] = await this.db.update(assets)
             .set({
@@ -676,6 +713,7 @@ export class AssetsService {
         await this.logLifecycle({
             assetId: updatedAsset.id,
             actionType: 'DECOMMISSIONED',
+            performedById: actorId,
             previousAssigneeId: targetAsset?.assignedTo,
             newAssigneeId: null,
             metadata: { oldStatus: targetAsset?.status, newStatus: updatedAsset.status }
@@ -687,6 +725,43 @@ export class AssetsService {
             desc: `${updatedAsset.name} has been taken out of service.`,
             icon: 'delete',
             color: 'red',
+            roles: ['SUPER_ADMIN', 'ADMIN_USER', 'AUDITOR'],
+            assetId: id
+        });
+
+        return updatedAsset;
+    }
+
+    async markAssetMaintenance(id: string, actorId?: string) {
+        const targetAsset = await this.db.query.assets.findFirst({ where: eq(assets.id, id) });
+        if (!targetAsset) {
+            throw new Error(`Asset with id ${id} not found`);
+        }
+
+        const [updatedAsset] = await this.db.update(assets)
+            .set({ status: 'MAINTENANCE' as any })
+            .where(eq(assets.id, id))
+            .returning();
+
+        if (!updatedAsset) {
+            throw new Error(`Asset with id ${id} not found or update failed`);
+        }
+
+        await this.logLifecycle({
+            assetId: updatedAsset.id,
+            actionType: 'STATUS_CHANGE',
+            performedById: actorId,
+            previousAssigneeId: targetAsset.assignedTo,
+            newAssigneeId: targetAsset.assignedTo,
+            metadata: { oldStatus: targetAsset.status, newStatus: 'MAINTENANCE', reason: 'Flagged for maintenance' }
+        });
+
+        await this.db.insert(assetActivities).values({
+            type: 'system',
+            title: 'Maintenance Required',
+            desc: `${updatedAsset.name} was marked for maintenance/repair.`,
+            icon: 'build',
+            color: 'amber',
             roles: ['SUPER_ADMIN', 'ADMIN_USER', 'AUDITOR'],
             assetId: id
         });
@@ -791,10 +866,25 @@ export class AssetsService {
         });
         if (!asset) throw new Error(`Asset with id ${id} not found`);
 
-        const assignee = await this.db.query.users.findFirst({
-            where: eq(users.id, asset.assignedTo)
-        });
-        
+        const isUuidStr = (val?: string | null) => !!val && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val);
+
+        let assignee = asset.assignedTo ? await this.db.query.users.findFirst({
+            where: isUuidStr(asset.assignedTo) ? eq(users.id, asset.assignedTo) : eq(users.email, asset.assignedTo),
+            with: { employee: true }
+        }) : null;
+
+        if (!assignee && asset.assignedTo) {
+            const emp = await this.db.query.employees.findFirst({
+                where: isUuidStr(asset.assignedTo) ? eq(employees.id, asset.assignedTo) : eq(employees.workEmail, asset.assignedTo)
+            });
+            if (emp && emp.userId) {
+                assignee = await this.db.query.users.findFirst({
+                    where: eq(users.id, emp.userId),
+                    with: { employee: true }
+                }) || null;
+            }
+        }
+
         const orgSetting = await this.db.query.orgSettings.findFirst({
             where: eq(orgSettings.id, 'singleton')
         });
@@ -802,7 +892,17 @@ export class AssetsService {
             ? orgSetting.hrEmails 
             : ['divinebuilds123@gmail.com'];
 
-        const custodianName = assignee ? (assignee as any).name || (assignee as any).firstName + ' ' + (assignee as any).lastName || assignee.email : 'Unknown Employee';
+        const assigneeEmp = (assignee as any)?.employee;
+        let custodianName = 'Staff Member';
+        if (assigneeEmp && (assigneeEmp.firstName || assigneeEmp.surname)) {
+            custodianName = `${assigneeEmp.firstName || ''} ${assigneeEmp.surname || ''}`.trim();
+        } else if (assignee?.email) {
+            const raw = assignee.email.split('@')[0].replace(/[._-]/g, ' ');
+            custodianName = raw.split(' ').map((w: string) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+        } else if (asset.assignedTo) {
+            const raw = asset.assignedTo.split('@')[0].replace(/[._-]/g, ' ');
+            custodianName = raw.split(' ').map((w: string) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+        }
 
         const attachments = base64Pdf ? [{
             content: base64Pdf,
@@ -907,7 +1007,8 @@ export class AssetsService {
         });
 
         const assignee = await this.db.query.users.findFirst({
-            where: eq(users.id, targetUserId)
+            where: eq(users.id, targetUserId),
+            with: { employee: true }
         });
 
         if (!assignee) {
@@ -935,16 +1036,17 @@ export class AssetsService {
                 hasCTA: true
             });
 
-            const staffFirst = (assignee as any).firstName || (assignee as any).name || assignee.email.split('@')[0];
+            const assigneeEmp = (assignee as any).employee;
+            const staffFirst = resolveStaffFirstName(assignee, targetUserId, assigneeEmp);
             await sendEmail(
                 assignee.email,
                 'Action Required — Your Consent Is Needed',
                 buildConsentRequestEmail({
                     firstName: staffFirst,
                     serialNumber: asset.serialNumber || asset.id,
-                    laptopModel: asset.modelNumber || asset.name,
-                    laptopSpecs: asset.description || asset.condition || 'N/A',
-                    consentUrl: `https://asset.noltfinance.com/consent/${asset.id}`
+                    laptopModel: asset.name,
+                    laptopSpecs: formatAssetSpecs(asset),
+                    consentUrl: `https://assets.noltfinance.com/#/consent/${asset.id}`
                 })
             ).catch(e => console.error("Email send failed for consent request:", e));
         }

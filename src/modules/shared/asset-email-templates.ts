@@ -3,6 +3,30 @@
  * Each function accepts template variables and returns a complete HTML string.
  */
 
+function formatFirstName(raw?: string): string {
+    if (!raw) return 'Team Member';
+    let clean = raw.trim();
+    if (clean.toLowerCase() === 'undefined' || clean.toLowerCase() === 'null') return 'Team Member';
+    if (clean.includes('@')) {
+        clean = clean.split('@')[0];
+    }
+    const spaceParts = clean.split(/\s+/).filter(Boolean);
+    if (spaceParts.length > 1) {
+        clean = spaceParts[0];
+    } else {
+        const dotParts = clean.split(/[._-]+/).filter(Boolean);
+        if (dotParts.length > 1) {
+            const firstLongPart = dotParts.find(p => p.length > 1) || dotParts[0];
+            clean = firstLongPart;
+        } else {
+            clean = dotParts[0] || clean;
+        }
+    }
+    clean = clean.replace(/[^a-zA-Z]/g, '');
+    if (!clean) return 'Team Member';
+    return clean.charAt(0).toUpperCase() + clean.slice(1).toLowerCase();
+}
+
 // ─── 1. Asset App Invite (to individual staff) ────────────────────────────────
 
 export function buildAssetAppInviteEmail(firstName: string): string {
@@ -33,7 +57,7 @@ export function buildAssetAppInviteEmail(firstName: string): string {
           </td>
         </tr></table></td></tr>
         <tr><td style="background-color:#ffffff;padding:36px 40px 20px;">
-          <p style="margin:0 0 18px 0;font-family:Arial,sans-serif;font-size:16px;font-weight:700;color:#031421;">Hi ${firstName.trim()},</p>
+          <p style="margin:0 0 18px 0;font-family:Arial,sans-serif;font-size:16px;font-weight:700;color:#031421;">Hi ${formatFirstName(firstName)},</p>
           <p style="margin:0 0 16px 0;font-family:Arial,sans-serif;font-size:14px;line-height:1.8;color:#333333;">You have been granted access to the <strong style="color:#031421;">NOLT Asset Inventory (AssetTrackPro)</strong> — your central hub for tracking and managing company assets.</p>
           <p style="margin:0 0 16px 0;font-family:Arial,sans-serif;font-size:14px;line-height:1.8;color:#333333;">It gives you real-time visibility of assets assigned to you, lets you confirm receipts, flag issues, and keeps the asset register accurate.</p>
         </td></tr>
@@ -54,7 +78,7 @@ export function buildAssetAppInviteEmail(firstName: string): string {
         <tr><td style="background-color:#ffffff;padding:0 40px 28px;" align="center">
           <table role="presentation" border="0" cellpadding="0" cellspacing="0"><tr>
             <td align="center" style="background-color:#028ff5;border-radius:6px;">
-              <a href="https://asset.noltfinance.com" target="_blank" style="display:inline-block;font-family:Arial,sans-serif;font-size:14px;font-weight:700;color:#ffffff;text-decoration:none;padding:14px 36px;white-space:nowrap;">Open the Asset App</a>
+              <a href="https://assets.noltfinance.com" target="_blank" style="display:inline-block;font-family:Arial,sans-serif;font-size:14px;font-weight:700;color:#ffffff;text-decoration:none;padding:14px 36px;white-space:nowrap;">Open the Asset App</a>
             </td>
           </tr></table>
         </td></tr>
@@ -138,7 +162,7 @@ export function buildAssetReallocationEmail(d: ReallocationEmailData): string {
           </td>
         </tr></table></td></tr>
         <tr><td style="background-color:#ffffff;padding:36px 40px 20px;">
-          <p style="margin:0 0 18px 0;font-family:Arial,sans-serif;font-size:15px;font-weight:700;color:#031421;">Dear HR,</p>
+          <p style="margin:0 0 18px 0;font-family:Arial,sans-serif;font-size:15px;font-weight:700;color:#031421;">Hello,</p>
           <p style="margin:0;font-family:Arial,sans-serif;font-size:14px;line-height:1.8;color:#333333;">Please be informed that the following asset has been reallocated and assigned to <strong style="color:#031421;">${d.staffName.trim()}</strong>.</p>
         </td></tr>
         <tr><td style="background-color:#ffffff;padding:0 40px 20px;">
@@ -231,7 +255,7 @@ export function buildConsentRequestEmail(d: ConsentRequestEmailData): string {
           </td>
         </tr></table></td></tr>
         <tr><td style="background-color:#ffffff;padding:36px 40px 20px;">
-          <p style="margin:0 0 18px 0;font-family:Arial,sans-serif;font-size:16px;font-weight:700;color:#031421;">Hi ${d.firstName.trim()},</p>
+          <p style="margin:0 0 18px 0;font-family:Arial,sans-serif;font-size:16px;font-weight:700;color:#031421;">Hi ${formatFirstName(d.firstName)},</p>
           <p style="margin:0 0 16px 0;font-family:Arial,sans-serif;font-size:14px;line-height:1.8;color:#333333;">In line with the <strong style="color:#031421;">Workstation Administration and Lifecycle Policy</strong>, you are expected to provide your consent before processing your personal data on the NOLT Asset Inventory.</p>
           <p style="margin:0 0 16px 0;font-family:Arial,sans-serif;font-size:14px;line-height:1.8;color:#333333;">Data collected includes your name, staff ID, department, device assignment records, and in-app activity. The device assigned to you for this purpose is detailed below:</p>
         </td></tr>
@@ -250,8 +274,7 @@ export function buildConsentRequestEmail(d: ConsentRequestEmailData): string {
         <tr><td style="background-color:#ffffff;padding:0 40px 24px;">
           <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%"><tr>
             <td background="https://pub-74b956e78e404291a932f28ada63b70c.r2.dev/Pattern-Blue-Bckground.png" style="background-color:#0b8ff2;background-image:url('https://pub-74b956e78e404291a932f28ada63b70c.r2.dev/Pattern-Blue-Bckground.png');background-size:cover;background-repeat:no-repeat;background-position:center center;border-radius:8px;padding:20px 24px;" align="center">
-              <p style="margin:0 0 4px 0;font-family:Arial,sans-serif;font-size:15px;font-weight:700;color:#ffffff;line-height:1.5;">Review the full consent notice and give your response.</p>
-              <p style="margin:0;font-family:Arial,sans-serif;font-size:14px;font-weight:600;color:#031421;line-height:1.5;">Your response is required to activate your access.</p>
+              <p style="margin:0;font-family:Arial,sans-serif;font-size:15px;font-weight:700;color:#ffffff;line-height:1.5;">Review the full consent notice and give your response.</p>
             </td>
           </tr></table>
         </td></tr>
@@ -318,7 +341,7 @@ export function buildConsentSignedEmail(custodianName: string, assetName: string
           </td>
         </tr></table></td></tr>
         <tr><td style="background-color:#ffffff;padding:36px 40px 20px;">
-          <p style="margin:0 0 18px 0;font-family:Arial,sans-serif;font-size:15px;font-weight:700;color:#031421;">Dear HR,</p>
+          <p style="margin:0 0 18px 0;font-family:Arial,sans-serif;font-size:15px;font-weight:700;color:#031421;">Hello,</p>
           <p style="margin:0;font-family:Arial,sans-serif;font-size:14px;line-height:1.8;color:#333333;"><strong style="color:#031421;">${custodianName.trim()}</strong> has formally signed the consent form for the assigned asset: <strong style="color:#031421;">${assetName}</strong> (${assetId}).</p>
         </td></tr>
         <tr><td style="background-color:#ffffff;padding:0 40px 24px;">
@@ -331,7 +354,7 @@ export function buildConsentSignedEmail(custodianName: string, assetName: string
         <tr><td style="background-color:#ffffff;padding:0 40px 28px;" align="center">
           <table role="presentation" border="0" cellpadding="0" cellspacing="0"><tr>
             <td align="center" style="background-color:#028ff5;border-radius:6px;">
-              <a href="https://assets.noltfinance.com/consent/${assetId}/document" target="_blank" style="display:inline-block;font-family:Arial,sans-serif;font-size:14px;font-weight:700;color:#ffffff;text-decoration:none;padding:14px 36px;white-space:nowrap;">View Online Document</a>
+              <a href="https://assets.noltfinance.com/#/consent/${assetId}/document" target="_blank" style="display:inline-block;font-family:Arial,sans-serif;font-size:14px;font-weight:700;color:#ffffff;text-decoration:none;padding:14px 36px;white-space:nowrap;">View Online Document</a>
             </td>
           </tr></table>
         </td></tr>
@@ -353,8 +376,7 @@ export function buildConsentSignedEmail(custodianName: string, assetName: string
     </td>
   </tr>
 </table>
-<!--[if mso]></td></tr></table><![endif]-->
+<!--[if mso]></td></tr>wait<![endif]-->
 </body>
 </html>`;
 }
-

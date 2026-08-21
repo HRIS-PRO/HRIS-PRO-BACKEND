@@ -53,6 +53,10 @@ export async function assetsRoutes(app: FastifyInstance) {
         assetsController.decommissionAsset.bind(assetsController)
     );
     app.put(
+        '/:id/maintenance',
+        assetsController.markAssetMaintenance.bind(assetsController)
+    );
+    app.put(
         '/:id/unassign',
         assetsController.unassignAsset.bind(assetsController)
     );

@@ -17,6 +17,23 @@ const dbPlugin: FastifyPluginAsync = async (fastify) => {
     // Make the Drizzle client available as fastify.db
     fastify.decorate('db', db);
 
+    // Ensure all expected enum values exist in Postgres (idempotent — safe to run every boot)
+    try {
+        await db.execute(
+            /* sql */ `
+            DO $$
+            BEGIN
+                ALTER TYPE asset_status ADD VALUE IF NOT EXISTS 'MAINTENANCE';
+            EXCEPTION WHEN others THEN NULL;
+            END
+            $$;
+            ` as any
+        );
+        fastify.log.info('DB enum patch applied (asset_status)');
+    } catch (e) {
+        fastify.log.warn('DB enum patch skipped (may already be up to date): ' + (e as any)?.message);
+    }
+
     fastify.addHook('onClose', async (instance) => {
         // Drizzle with postgres.js handles connection closing automatically when the process exits,
         // but if we needed manual cleanup, it would go here.

@@ -346,7 +346,7 @@ export class CampaignsService {
         for (const email of uniqueEmails) {
             const emailHtml = `
                 <div style="padding: 10px 0;">
-                    <p style="font-size:16px;">Hi there,</p>
+                    <p style="font-size:16px;">Hi ${email.split('@')[0].charAt(0).toUpperCase() + email.split('@')[0].slice(1)},</p>
                     <p><strong>${actorName}</strong> has submitted a campaign that requires your review and approval in the <strong style="color:#4F46E5">"${workspace.title}"</strong> workspace.</p>
                     <div style="background:#f5f3ff;border-left:4px solid #4F46E5;padding:16px 20px;border-radius:8px;margin:24px 0">
                         <p style="margin:0;font-size:12px;color:#4F46E5;font-weight:700;text-transform:uppercase;letter-spacing:1px">Campaign Details</p>
