@@ -136,8 +136,9 @@ export class AssetsController {
                 return reply.status(400).send({ message: 'assignedTo, manager, department, and location are required for assignment' });
             }
 
+            const actorId = (request.user as any)?.id;
             const sendConsentMail = data.sendConsentMail !== false;
-            const updatedAsset = await this.assetsService.assignAsset(id, data, undefined, sendConsentMail);
+            const updatedAsset = await this.assetsService.assignAsset(id, data, actorId, sendConsentMail);
             return reply.send(updatedAsset);
         } catch (error: any) {
             request.log.error(error);
@@ -171,8 +172,9 @@ export class AssetsController {
             const data = request.body;
 
             // Should verify user is super-admin here or rely on route guard
+            const actorId = (request.user as any)?.id;
             const sendConsentMail = data.sendConsentMail !== false;
-            const updatedAsset = await this.assetsService.reassignAsset(id, data, undefined, sendConsentMail);
+            const updatedAsset = await this.assetsService.reassignAsset(id, data, actorId, sendConsentMail);
             return reply.send(updatedAsset);
         } catch (error: any) {
             request.log.error(error);
@@ -183,7 +185,8 @@ export class AssetsController {
     async decommissionAsset(request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) {
         try {
             const { id } = request.params;
-            const updatedAsset = await this.assetsService.decommissionAsset(id);
+            const actorId = (request.user as any)?.id;
+            const updatedAsset = await this.assetsService.decommissionAsset(id, actorId);
             return reply.send(updatedAsset);
         } catch (error: any) {
             request.log.error(error);
@@ -194,7 +197,8 @@ export class AssetsController {
     async markAssetMaintenance(request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) {
         try {
             const { id } = request.params;
-            const updatedAsset = await this.assetsService.markAssetMaintenance(id);
+            const actorId = (request.user as any)?.id;
+            const updatedAsset = await this.assetsService.markAssetMaintenance(id, actorId);
             return reply.send(updatedAsset);
         } catch (error: any) {
             request.log.error(error);
@@ -204,7 +208,8 @@ export class AssetsController {
     async unassignAsset(request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) {
         try {
             const { id } = request.params;
-            const updatedAsset = await this.assetsService.unassignAsset(id);
+            const actorId = (request.user as any)?.id;
+            const updatedAsset = await this.assetsService.unassignAsset(id, actorId);
             return reply.send(updatedAsset);
         } catch (error: any) {
             request.log.error(error);

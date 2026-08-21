@@ -1,4 +1,4 @@
-import { eq, inArray, and, or, isNull } from 'drizzle-orm';
+import { eq, inArray, and, or, isNull, sql } from 'drizzle-orm';
 import { assets, users, assetActivities, assetLocations, departments, employees, assetLifecycleLogs, assetCategories, orgSettings } from '../../db/schema';
 import { AssetLocationsService } from '../asset-locations/asset-locations.service';
 import { supabase } from '../../utils/supabase';
@@ -696,7 +696,7 @@ export class AssetsService {
         return updatedAsset;
     }
 
-    async decommissionAsset(id: string) {
+    async decommissionAsset(id: string, actorId?: string) {
         const targetAsset = await this.db.query.assets.findFirst({ where: eq(assets.id, id) });
         const [updatedAsset] = await this.db.update(assets)
             .set({
@@ -713,6 +713,7 @@ export class AssetsService {
         await this.logLifecycle({
             assetId: updatedAsset.id,
             actionType: 'DECOMMISSIONED',
+            performedById: actorId,
             previousAssigneeId: targetAsset?.assignedTo,
             newAssigneeId: null,
             metadata: { oldStatus: targetAsset?.status, newStatus: updatedAsset.status }
@@ -731,22 +732,25 @@ export class AssetsService {
         return updatedAsset;
     }
 
-    async markAssetMaintenance(id: string) {
+    async markAssetMaintenance(id: string, actorId?: string) {
         const targetAsset = await this.db.query.assets.findFirst({ where: eq(assets.id, id) });
         if (!targetAsset) {
             throw new Error(`Asset with id ${id} not found`);
         }
 
         const [updatedAsset] = await this.db.update(assets)
-            .set({
-                status: 'MAINTENANCE'
-            })
+            .set({ status: 'MAINTENANCE' as any })
             .where(eq(assets.id, id))
             .returning();
+
+        if (!updatedAsset) {
+            throw new Error(`Asset with id ${id} not found or update failed`);
+        }
 
         await this.logLifecycle({
             assetId: updatedAsset.id,
             actionType: 'STATUS_CHANGE',
+            performedById: actorId,
             previousAssigneeId: targetAsset.assignedTo,
             newAssigneeId: targetAsset.assignedTo,
             metadata: { oldStatus: targetAsset.status, newStatus: 'MAINTENANCE', reason: 'Flagged for maintenance' }
